@@ -1,0 +1,15 @@
+.Rproj.user
+*.Rproj
+.Rhistory
+*.RData
+.Ruserdata
+*.rda
+*.csv
+*.xls*
+*.doc
+*.rds
+*.png
+*_cache/
+*.nb.html
+.Rbuildignore
+*.pdf
