@@ -1,0 +1,241 @@
+---
+title: "Shorebird Survey"
+author: Alex S.
+output: 
+  html_document:
+    number_sections: no
+    theme: journal
+    toc: yes
+    toc_float:
+      collapsed: no
+  pdf_document:
+    toc: yes
+date: "Last Updated: `r format(Sys.time(), '%Y-%m-%d')`" 
+---
+
+```{r setup, include=FALSE, echo=FALSE, cache=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      include = FALSE,
+                      cache = TRUE,
+                      warning = FALSE, 
+                      message = FALSE)
+
+library(tidyverse)
+library(RColorBrewer)
+library(lubridate)
+
+# Utils
+g <- function(.) glimpse(.)
+
+medium_fonts <- ggplot2::theme_bw() +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(size = 14),
+    axis.text.x = ggplot2::element_text(size = 12),
+    axis.text.y = ggplot2::element_text(size = 12),
+    axis.title.x = ggplot2::element_text(size = 12),
+    axis.title.y = ggplot2::element_text(size = 12),
+    # legend.title = ggplot2::element_blank(),
+    legend.text = ggplot2::element_text(size = 12),
+    strip.text.x = ggplot2::element_text(size = 12),
+    strip.text.y = ggplot2::element_text(size = 12)
+  )
+```
+
+
+# Overview
+
+Basic EDA of shorebird data.
+
+Goals:
+- what can we learn?
+- do we need to measure at low/m/high tide?
+- has number of species, diversity changed over time?
+
+Qs:
+- is Pickleweed our control?
+
+# Load data
+
+From Excel file:
+
+ISLE CODES:   
+AS = ARAMBURU, SOUTH END.   
+AC = ARAMBURU CENTRAL.   
+AN = ARAMBURU, NORTH END.    
+U = UN-NAMED.   
+P = PICKLEWEED.
+
+POSITION CODES:  
+V=VEGETATION.  
+RS=ROCK/SAND.  
+M=MUDFLAT.  
+SW=STANDING IN WATER.   
+FW=FLOATING ON WATER.  
+OW=OVER WATER
+
+BEHAVIOR CODES:  
+R=ROOSTING/RESTING.  
+F=FORAGING (probing, dabbling, diving, aerial surveying).  
+O =OTHER (Comment)
+
+
+```{r}
+library(readxl)
+
+island_key <- data.frame(
+  short_name = c("as", "ac", "an", "u", "p"),
+  long_name = c("aramburu_south", "aramburu_central", "aramburu_north", "unnamed", "pickleweed")
+)
+
+position_key <- data.frame(
+  short_name = c("v", "rs", "m", "sw", "fw", "ow"),
+  long_name = c("vegetation", "rock_sand", "mudflat", "standing_in_water", "floating_on_water", "over_water")
+)
+
+behavior_key <- data.frame(
+  short_name = c("r", "f", "o"),
+  long_name = c("roosting", "foraging", "other")
+)
+
+dat <- read_excel("data/SHOREBIRD_DATA_Complete_2018.xls", sheet = 1) %>% 
+  rename_all(tolower) %>%
+  select(-analyze, -`pre/post construction`) %>%
+  rename(obs_date = date,
+         tide_ft = `tide (ft)`,
+         tide_hl = `high/low`, # I assume this is tide?
+         island = `aram?`,
+         aou_num = `aou num`,
+         record_num = `record num`,
+         gulls = gullls
+         ) %>% 
+  
+  mutate(obs_date = as.Date(obs_date),
+         month_no = lubridate::month(obs_date),
+         year = lubridate::year(obs_date) # there were many missing years, so re-do here
+         ) %>% 
+  
+  # convert guild to logical
+  mutate(shorebirds = grepl("x", tolower(shorebirds)),
+         peeps = grepl("x", tolower(peeps)),
+         gulls = grepl("x", tolower(gulls)),
+         terns = grepl("x", tolower(terns)),
+         wading = grepl("x", tolower(wading)),
+         grebes = grepl("x", tolower(grebes))
+         ) %>% 
+  
+  # clean up tide field
+  mutate(tide_hl = gsub('"', "", tolower(tide_hl))) %>% 
+  # remove some funny data (TODO: check with Julia)
+  subset(isle != "ROAMING" & isle != "*")
+  
+dat %>% g
+
+
+```
+
+## check
+```{r}
+dat %>% 
+  group_by(common) %>% 
+  summarize(ns = n())
+
+```
+
+# Basic EDA
+
+## Sampling Methods
+
+Observations
+- typically all chunks of the island were surveyed on every observation date
+- data spans 2009-2018, with 1-7 observations per month
+- no obs in 1H 2009, 2H 2012, 2H 2015, and all of 2017
+
+### per island
+Looks like survey included all island areas virtually every time
+
+```{r}
+dat %>% 
+  group_by(obs_date, isle) %>% 
+  summarize(n_sp = n()) %>% 
+  mutate(has_count = !is.na(n_sp)) %>% 
+  ggplot(aes(x = factor(obs_date), y = isle, fill = has_count)) +
+  geom_raster() +
+  scale_x_discrete(breaks = NULL) +
+  medium_fonts +
+  labs(x = "observation date", y = "island has observations")
+```
+
+### per month
+```{r}
+dat %>% 
+  select(isle, year, month_no, obs_date) %>% 
+  distinct() %>% 
+  group_by(isle, year, month_no) %>% 
+  summarize(n_obs = n()) %>% 
+  ungroup() %>%
+  # complete missing observations:
+  tidyr::spread(month_no, n_obs) %>% 
+  tidyr::gather(month_no, n_obs, 3:15) %>% 
+  mutate(has_count = !is.na(n_obs)) %>% 
+  mutate(month_no = as.numeric(month_no)) %>% 
+  subset(!is.na(month_no)) %>%
+  ggplot(aes(x = month_no, y = year, fill = n_obs)) +
+  geom_raster(aes(fill = n_obs)) +
+  facet_wrap(~isle) +
+  scale_x_continuous(breaks = seq(1,12)) +
+  scale_y_continuous(breaks = seq(2009,2018)) +
+  theme_bw() +
+  labs(title = "Observations per Month")
+
+# dat %>% 
+#   select(isle, year, month_no, obs_date) %>% 
+#   distinct() %>% 
+#   group_by(isle, year, month_no) %>% 
+#   summarize(n_obs = n()) %>% 
+#   ungroup() %>%
+#   # complete missing observations:
+#   tidyr::spread(month_no, n_obs) %>% 
+#   tidyr::gather(month_no, n_obs, 3:15) %>% 
+#   mutate(has_count = !is.na(n_obs)) %>% 
+#   mutate(month_no = as.numeric(month_no)) %>% 
+#   subset(!is.na(month_no)) %>%
+#   ggplot(aes(x = month_no, y = year, fill = has_count)) +
+#   geom_raster(aes(fill = has_count)) +
+#   facet_wrap(~isle) +
+#   scale_x_continuous(breaks = seq(1,12)) +
+#   scale_y_continuous(breaks = seq(2009,2018)) +
+#   theme_bw() 
+
+```
+
+
+## Species counts
+```{r}
+dat %>% 
+  subset(isle != "*") %>% 
+  subset(tide_hl != "mid") %>% 
+  group_by(obs_date, isle, tide_hl) %>% 
+  summarize(n_species = n(),
+            n_individuals = sum(qty)) %>% 
+  ggplot(aes(x = obs_date, y = n_species, group = tide_hl)) +
+  geom_point(aes(color = tide_hl), size = 1, alpha = 0.8) +
+  geom_smooth(aes(color = tide_hl)) +
+  medium_fonts +
+  facet_wrap(~isle)
+```
+
+## Individual counts
+```{r}
+dat %>% 
+  subset(isle != "*") %>% 
+  subset(tide_hl != "mid") %>% 
+  group_by(obs_date, isle, tide_hl) %>% 
+  summarize(n_species = n(),
+            n_individuals = sum(qty)) %>% 
+  ggplot(aes(x = obs_date, y = n_individuals, group = tide_hl)) +
+  geom_point(aes(color = tide_hl), size = 1, alpha = 0.8) +
+  geom_smooth(aes(color = tide_hl)) +
+  medium_fonts +
+  facet_wrap(~isle) +
+  ylim(0,800)
+```
