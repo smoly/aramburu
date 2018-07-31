@@ -23,6 +23,8 @@ knitr::opts_chunk$set(echo = FALSE,
 library(tidyverse)
 library(RColorBrewer)
 library(lubridate)
+library(readxl)
+library(broom)
 
 # Utils
 g <- function(.) glimpse(.)
@@ -47,14 +49,19 @@ medium_fonts <- ggplot2::theme_bw() +
 Basic EDA of shorebird data.
 
 Goals:
-- what can we learn?
-- do we need to measure at low/m/high tide?
-- has number of species, diversity changed over time?
+1) Is there enough data to make statements about changes in species over time? i.e. can we get statistical significance for differences between Aramburu & Pickelweed.
+2) Has the number of species or abundance of any species changed over time on Aramburu vs Pickleweed?
+3) Are there differences between high/low tide?
+4) Are there obvious improvements to methodology we can make?
 
 Qs:
-- is Pickleweed our control?
+- is Pickleweed our control? Y
+- were both high and low tide measured for the same amount of time?
+- for a particular observation day it looks like each bird can be in there for every isle, tide, position, behabior, and observer(?)
+- generally ever sampled day is sampled at every tide and at all locations??
 
-# Load data
+
+# Load & format data
 
 From Excel file:
 
@@ -80,8 +87,6 @@ O =OTHER (Comment)
 
 
 ```{r}
-library(readxl)
-
 island_key <- data.frame(
   short_name = c("as", "ac", "an", "u", "p"),
   long_name = c("aramburu_south", "aramburu_central", "aramburu_north", "unnamed", "pickleweed")
@@ -111,8 +116,13 @@ dat <- read_excel("data/SHOREBIRD_DATA_Complete_2018.xls", sheet = 1) %>%
   
   mutate(obs_date = as.Date(obs_date),
          month_no = lubridate::month(obs_date),
-         year = lubridate::year(obs_date) # there were many missing years, so re-do here
+         year = lubridate::year(obs_date) # there were many missing year entries, populate here
          ) %>% 
+
+  # species names
+  mutate(species = tolower(species)) %>% 
+  mutate(species = ifelse(species %in% c("none", "-", "0", NA), "none", species)) %>% 
+  mutate(is_bird = !(species %in% c("deer", "humans"))) %>% 
   
   # convert guild to logical
   mutate(shorebirds = grepl("x", tolower(shorebirds)),
@@ -123,21 +133,19 @@ dat <- read_excel("data/SHOREBIRD_DATA_Complete_2018.xls", sheet = 1) %>%
          grebes = grepl("x", tolower(grebes))
          ) %>% 
   
-  # clean up tide field
+  # tide 
   mutate(tide_hl = gsub('"', "", tolower(tide_hl))) %>% 
+  # mutate(tide_hl = factor(tide_hl, levels = "low", "mid", "high")) %>%
+  
   # remove some funny data (TODO: check with Julia)
-  subset(isle != "ROAMING" & isle != "*")
+  subset(isle != "ROAMING" & isle != "*") %>% 
+  
+  # fill missing location data
+  mutate(island = ifelse(tolower(isle) %in% c("as", "ac", "an"), "Aramburu", 
+                         ifelse(tolower(isle) %in% c("p"), "Pickleweed", "Unknown")))
   
 dat %>% g
 
-
-```
-
-## check
-```{r}
-dat %>% 
-  group_by(common) %>% 
-  summarize(ns = n())
 
 ```
 
@@ -147,6 +155,7 @@ dat %>%
 
 Observations
 - typically all chunks of the island were surveyed on every observation date
+- typically measured at both high and low tide, sometimes only one. Occasionaly also "mid" tide.
 - data spans 2009-2018, with 1-7 observations per month
 - no obs in 1H 2009, 2H 2012, 2H 2015, and all of 2017
 
@@ -162,8 +171,24 @@ dat %>%
   geom_raster() +
   scale_x_discrete(breaks = NULL) +
   medium_fonts +
-  labs(x = "observation date", y = "island has observations")
+  labs(x = "observation date", y = "island")
 ```
+
+### tide
+Looks like survey included all island areas virtually every time
+
+```{r}
+dat %>% 
+  group_by(obs_date, tide_hl) %>% 
+  summarize(n_sp = n()) %>% 
+  mutate(has_count = !is.na(n_sp)) %>% 
+  ggplot(aes(x = factor(obs_date), y = tide_hl, fill = has_count)) +
+  geom_raster() +
+  scale_x_discrete(breaks = NULL) +
+  medium_fonts +
+  labs(x = "observation date", y = "tide")
+```
+
 
 ### per month
 ```{r}
@@ -187,27 +212,7 @@ dat %>%
   theme_bw() +
   labs(title = "Observations per Month")
 
-# dat %>% 
-#   select(isle, year, month_no, obs_date) %>% 
-#   distinct() %>% 
-#   group_by(isle, year, month_no) %>% 
-#   summarize(n_obs = n()) %>% 
-#   ungroup() %>%
-#   # complete missing observations:
-#   tidyr::spread(month_no, n_obs) %>% 
-#   tidyr::gather(month_no, n_obs, 3:15) %>% 
-#   mutate(has_count = !is.na(n_obs)) %>% 
-#   mutate(month_no = as.numeric(month_no)) %>% 
-#   subset(!is.na(month_no)) %>%
-#   ggplot(aes(x = month_no, y = year, fill = has_count)) +
-#   geom_raster(aes(fill = has_count)) +
-#   facet_wrap(~isle) +
-#   scale_x_continuous(breaks = seq(1,12)) +
-#   scale_y_continuous(breaks = seq(2009,2018)) +
-#   theme_bw() 
-
 ```
-
 
 ## Species counts
 ```{r}
@@ -222,6 +227,18 @@ dat %>%
   geom_smooth(aes(color = tide_hl)) +
   medium_fonts +
   facet_wrap(~isle)
+
+dat %>% 
+  subset(island != "Unknown") %>% 
+  subset(tide_hl != "mid") %>% 
+  group_by(obs_date, island, tide_hl) %>% 
+  summarize(n_species = n(),
+            n_individuals = sum(qty)) %>% 
+  ggplot(aes(x = obs_date, y = n_species, group = tide_hl)) +
+  geom_point(aes(color = tide_hl), size = 1, alpha = 0.8) +
+  geom_smooth(aes(color = tide_hl)) +
+  medium_fonts +
+  facet_wrap(~island)
 ```
 
 ## Individual counts
@@ -238,4 +255,111 @@ dat %>%
   medium_fonts +
   facet_wrap(~isle) +
   ylim(0,800)
+
+dat %>% 
+  subset(island != "Unknown") %>% 
+  subset(tide_hl != "mid") %>% 
+  group_by(obs_date, island, tide_hl) %>% 
+  summarize(n_species = n(),
+            n_individuals = sum(qty)) %>% 
+  ggplot(aes(x = obs_date, y = n_individuals, group = tide_hl)) +
+  geom_point(aes(color = tide_hl), size = 1, alpha = 0.8) +
+  geom_smooth(aes(color = tide_hl)) +
+  medium_fonts +
+  facet_wrap(~island) +
+  ylim(0,1000)
 ```
+
+## Species low  vs high tide
+
+Difference in species observed, high vs. low tide.
+
+```{r}
+# number of individuals per species, per date, isle, tide (grouped across observers, behaviors, positions, comments, etc.)
+tide_qty_per_sp <- dat %>% 
+  subset(tide_hl %in% c("low", "high")) %>%
+  subset(is_bird) %>% 
+  group_by(obs_date, island, tide_hl, common) %>% 
+  summarize(qty = sum(qty, na.rm = T))
+
+tide_qty_per_sp %>% 
+  group_by(obs_date, island, tide_hl) %>%
+  summarize(n_species_observed = n()) %>%
+  tidyr::spread(tide_hl, n_species_observed) %>% 
+  mutate(difference = low-high) %>% 
+  ggplot(aes(difference)) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_bar(alpha = 0.9) +
+  facet_wrap(~island) +
+  medium_fonts +
+  labs(x = "difference", y = "number of sampling days", 
+       title = "High vs. Low Tide difference in # species observed", 
+       subtitle = "positive values: low tide has more species", 
+       caption = "(paired comparison)")
+```
+
+
+Estimate whether difference in frequency of observation of each species is significantly different between high and low tide.
+
+```{r}
+tide_qty <- tide_qty_per_sp %>% 
+  group_by(island, tide_hl, common) %>% 
+  summarize(n_times_sp_observed = n()) %>% 
+  # fill missing values with 0s:
+  tidyr::spread(tide_hl, n_times_sp_observed) %>% # number times species was observed
+  replace_na(list(high = 0, low = 0)) %>% 
+  tidyr::gather(tide_hl, n_times_sp_observed, high, low) %>% 
+  left_join(
+    tide_qty_per_sp %>% 
+      group_by(island, tide_hl) %>% 
+      summarize(n_surveyed = length(unique(obs_date))),
+    by = c("island", "tide_hl")
+  ) 
+
+tide_diffs <- tide_qty %>% 
+  group_by(island, common) %>%
+  arrange(tide_hl) %>% 
+  do(tidy(prop.test(.$n_times_sp_observed, .$n_surveyed))) %>% 
+  rename(high = estimate1,
+         low = estimate2)  %>% 
+  mutate(difference = low - high) # difference in whether bird was sighted on a survey between low & high tide
+```
+
+```{r}
+plot_dat <- tide_diffs %>% 
+  # subset(island != "Unknown") %>%
+  subset(island == "Aramburu") %>%
+  subset(!is.na(common)) %>% 
+  subset(p.value < 0.01) %>% 
+  select(island, common, low, high) %>% 
+  mutate(diff_type = ifelse(low > high, "more at low tide", "fewer at low tide")) %>% 
+  tidyr::gather(tide_hl, frequency, low, high) %>% 
+  mutate(tide_hl = factor(tide_hl, levels = c("low", "high"))) %>% 
+  mutate(tide_hl_num = as.numeric(tide_hl)) 
+
+plot_dat %>% 
+  arrange(diff_type)
+
+plot_dat %>% 
+  ggplot(aes(x = tide_hl_num, y = frequency)) +
+  geom_line(aes(color = common)) +
+  geom_point(aes(color = common), size = 3) +
+  geom_text(data = subset(plot_dat, tide_hl_num == 1), aes(label = common, color = common), 
+            size = 3, hjust = 1.15, fontface = "bold") +
+   geom_text(data = subset(plot_dat, tide_hl_num == 2), aes(label = common, color = common), 
+             size = 3, hjust = -0.15, fontface = "bold") +
+  facet_wrap(~diff_type) + 
+  medium_fonts +
+  theme(strip.text.x = ggplot2::element_text(size = 10), 
+        legend.position = "none") +
+  scale_x_continuous(limits = c(0.0, 3), breaks = c(1,2), labels = c("low", "high"), minor_breaks = NULL) +
+  labs(x = "Tide", y = "Frequency Species is Observed (per survey)", 
+       title = "Species with significantly different presence at low vs. high tide",
+       caption = "p < 0.01, chi-squared test")
+
+```
+
+
+# Change over time
+
+## Species Count
