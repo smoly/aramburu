@@ -14,7 +14,7 @@ date: "Last Updated: `r format(Sys.time(), '%Y-%m-%d')`"
 ---
 
 ```{r setup, include=FALSE, echo=FALSE, cache=FALSE}
-knitr::opts_chunk$set(echo = TRUE,
+knitr::opts_chunk$set(echo = FALSE,
                       include = TRUE,
                       cache = TRUE,
                       warning = FALSE, 
@@ -53,26 +53,28 @@ condition_colors <- c("before" = "#FDBF6F",
 
 EDA of shorebird data on Aramburu Island following shoreline, wetland, & terrestrial enhancements in 2011-2012. Pickleweed & Unnamed Island are used as controls.
 
-Goals:
+## Goals
 
 1) Is there enough data to make statements about changes in species over time? i.e. can we get statistical significance for differences between Aramburu & Pickelweed.
 2) Has the number of species or abundance of any species changed over time on Aramburu vs Pickleweed? Have behaviors changed?
 3) Are there differences between high/low tide? 
 4) Are there obvious improvements to methodology we can make?
 
-Qs for Julia:
+## Qs for Julia
 
 - for a particular observation day it looks like each bird can be in there for every isle, tide, position, behabior, and observer(?)
 - were both high and low tide measured for the same amount of time?
 - generally ever sampled day is sampled at every tide and at all locations??
 - Do we think different observers would have different bird counts?
 - Are samples on different islands made on different times of day in a way that might affect results?
+- behavior code S is very common but not in index. what is it?
 
-Data notes:
+## Data notes
 
 - no obs in 1H 2009, 2H 2012, 2H 2015, and all of 2017
 - Observations usually made on all islands on same day and both high and low tide.
 - A bird may have multiple rows per observation bc of different behaviors, positions, comments, etc. so important to group by species when doing presence counts.
+- NB sometimes we analyze species **presence** (was there/was not) and sometimes individual **count** (how many)
 
 # Load & format data
 
@@ -96,11 +98,11 @@ OW=OVER WATER
 BEHAVIOR CODES:  
 R=ROOSTING/RESTING.  
 F=FORAGING (probing, dabbling, diving, aerial surveying).  
-O =OTHER (Comment)
+O=OTHER (Comment)
 
 
-Keys:
-```{r keys}
+**Keys:**
+```{r keys, echo = T}
 island_key <- data.frame(
   short_name = c("as", "ac", "an", "u", "p"),
   long_name = c("aramburu_south", "aramburu_central", "aramburu_north", "unnamed", "pickleweed")
@@ -118,8 +120,8 @@ behavior_key <- data.frame(
 ```
 
 
-Load data:
-```{r load-data}
+**Load data:**
+```{r load-data, echo = T, include = T}
 dat <- read_excel("data/SHOREBIRD_DATA_Complete_2018.xls", sheet = 1) %>% 
   rename_all(tolower) %>%
   select(-analyze, -`pre/post construction`) %>%
@@ -136,6 +138,11 @@ dat <- read_excel("data/SHOREBIRD_DATA_Complete_2018.xls", sheet = 1) %>%
          month_no = lubridate::month(obs_date),
          year = lubridate::year(obs_date) # there were many missing year entries, populate here
          ) %>% 
+  
+  # pre/post improvements (see note under "Change Over Time")
+  mutate(epoch = ifelse(obs_date < "2011-09-01", "before", 
+                        ifelse(obs_date < "2012-09-01", "construction", "after"))) %>% 
+  mutate(epoch = factor(epoch, levels = c("before", "construction", "after"))) %>% 
 
   # species names
   mutate(species = tolower(species)) %>% 
@@ -150,6 +157,24 @@ dat <- read_excel("data/SHOREBIRD_DATA_Complete_2018.xls", sheet = 1) %>%
          wading = grepl("x", tolower(wading)),
          grebes = grepl("x", tolower(grebes))
          ) %>% 
+  
+  # Make MECE guild column:
+  # In this data all peeps are also shorebirds and there's no "other" 
+  # NB should not have any peeps bc classified as shorebirds
+  mutate(guild = ifelse(shorebirds, "shorebirds", 
+                        ifelse(peeps, "peeps", 
+                               ifelse(gulls, "gulls", 
+                                      ifelse(terns, "terns", 
+                                             ifelse(wading, "wading", 
+                                                    ifelse(grebes, "grebes", "other"))))))
+         ) %>% 
+  
+  # clean up behaviors:
+  mutate(behavior = ifelse(behavior %in% c("FO", "FV", "FW", "F?", "O,F"), "F", 
+                           ifelse(behavior %in% c("O,F", "OW"), "O", 
+                                  ifelse(behavior %in% c("R/F", "F/R"), "R/F", 
+                                         ifelse(behavior %in% c("?", "FLYOVER"), NA, behavior))))) %>% 
+  mutate(behavior = factor(behavior, levels = c("O", "F", "R", "R/F", ""))) %>% 
   
   # tide 
   mutate(tide_hl = gsub('"', "", tolower(tide_hl))) %>% 
@@ -167,7 +192,7 @@ dat %>% g
 
 # Basic EDA
 
-## Sampling Methods
+## Sampling Methods {.tabset}
 
 Observations
 
@@ -177,7 +202,8 @@ Observations
 - no obs in 1H 2009, 2H 2012, 2H 2015, and all of 2017
 
 ### per island
-Looks like survey included all island areas virtually every time
+
+- Survey included all island areas virtually every time
 
 ```{r sampling-island}
 dat %>% 
@@ -193,10 +219,11 @@ dat %>%
 
 ### per tide level
 
-- Looks like survey included all island areas virtually every time
 - tide_ft is usually NA
+- usually birds were counted at both high and low tide, but not always 
+- will need to control for tide later
 
-```{r sampling-tide-1}
+```{r sampling-tide-1, include = F}
 dat %>% 
   ggplot(aes(tide_ft)) + 
   geom_density(aes(fill = tide_hl), alpha = 0.8)
@@ -217,6 +244,10 @@ dat %>%
 
 
 ### per month
+
+- observations vary 1-7 per month
+- missing data in 2017, 2H 2012, 2H 2015
+
 ```{r sampling-month}
 dat %>% 
   select(isle, year, month_no, obs_date) %>% 
@@ -240,76 +271,9 @@ dat %>%
 
 ```
 
-## Species counts
-```{r sp-count}
-dat %>%
-  subset(isle != "*") %>%
-  subset(tide_hl != "mid") %>%
-  group_by(obs_date, isle, tide_hl) %>%
-  summarize(n_species = length(unique(species)),
-            n_individuals = sum(qty)) %>%
-  ggplot(aes(x = obs_date, y = n_species, group = tide_hl)) +
-  geom_point(aes(color = tide_hl), size = 1, alpha = 0.8) +
-  geom_smooth(aes(color = tide_hl)) +
-  # medium_fonts +
-  theme_bw() +
-  facet_wrap(~isle)
+# Tide effects {.tabset}
 
-dat %>%
-  subset(tide_hl != "mid") %>%
-  group_by(obs_date, island, tide_hl) %>%
-  summarize(n_species = length(unique(species)),
-            n_individuals = sum(qty)) %>%
-  ggplot(aes(x = obs_date, y = n_species, group = tide_hl)) +
-  geom_point(aes(color = tide_hl), size = 1, alpha = 0.8) +
-  geom_smooth(aes(color = tide_hl)) +
-  # medium_fonts +
-  theme_bw() +
-  facet_wrap(~island)
-
-dat %>%
-  subset(tide_hl != "mid") %>%
-  subset(island %in% c("Aramburu", "Pickleweed")) %>%
-  group_by(obs_date, island, tide_hl) %>%
-  summarize(n_species = length(unique(species)),
-            n_individuals = sum(qty)) %>%
-  ggplot(aes(x = obs_date, y = n_species, group = tide_hl)) +
-  geom_point(aes(color = tide_hl), size = 1, alpha = 0.8) +
-  geom_smooth(aes(color = tide_hl)) +
-  # medium_fonts +
-  theme_bw() +
-  facet_wrap(~island)
-```
-
-## Individual counts
-```{r ind-count}
-dat %>% 
-  subset(isle != "*") %>% 
-  subset(tide_hl != "mid") %>% 
-  group_by(obs_date, isle, tide_hl) %>% 
-  summarize(n_individuals = sum(qty)) %>% 
-  ggplot(aes(x = obs_date, y = n_individuals, group = tide_hl)) +
-  geom_point(aes(color = tide_hl), size = 1, alpha = 0.8) +
-  geom_smooth(aes(color = tide_hl)) +
-  theme_bw() +
-  # medium_fonts +
-  facet_wrap(~isle) +
-  ylim(0,800)
-
-dat %>% 
-  subset(tide_hl != "mid") %>% 
-  group_by(obs_date, island, tide_hl) %>% 
-  summarize(n_individuals = sum(qty)) %>% 
-  ggplot(aes(x = obs_date, y = n_individuals, group = tide_hl)) +
-  geom_point(aes(color = tide_hl), size = 1, alpha = 0.8) +
-  geom_smooth(aes(color = tide_hl)) +
-  theme_bw() +
-  # medium_fonts +
-  facet_wrap(~island) +
-  ylim(0,1000)
-```
-
-# Tide: species count  vs. tide
+## Number of Birds
 
 There are more species observed at low tide than high tide, for all islands. This is consistent with known science. Yay. 
 
@@ -337,8 +301,9 @@ tide_qty_per_sp %>%
        caption = "(paired comparison)")
 ```
 
+## Species Presence
 
-Estimate whether difference in frequency of observation of each species is significantly different between high and low tide.
+Species whose presence (binary) is significantly different between low & high tide.
 
 ```{r tide-diffs-sig}
 tide_qty <- tide_qty_per_sp %>% 
@@ -408,8 +373,76 @@ tide_diffs %>%
   arrange(desc(abs(difference)))
 ```
 
+## Guild Presence
 
-# Change over time
+```{r guild-presence, echo = F}
+tide_guild_qty <- dat %>%
+  subset(tide_hl %in% c("low", "high")) %>%
+  subset(is_bird) %>%
+  group_by(island, tide_hl, guild) %>%
+  summarize(qty = sum(qty, na.rm = T))
+
+# append n observed (not idempot.; need to run above lines first)
+tide_guild_qty <- tide_guild_qty %>%
+  left_join(tide_guild_qty %>%
+              group_by(island, tide_hl) %>%
+              summarize(total_observed = sum(qty)),
+            by = c("island", "tide_hl")) %>%
+  mutate(p_observed = qty/total_observed)
+
+
+tide_guild_diffs <- tide_guild_qty %>%
+  group_by(island, guild) %>%
+  arrange(tide_hl) %>%
+  do(tidy(prop.test(.$qty, .$total_observed))) %>%
+  mutate(is_signif = p.value < 0.01) %>% 
+  rename(high = estimate1,
+         low = estimate2)  %>%
+  mutate(difference = low - high) # difference in whether bird was sighted on a survey between low & high tide
+
+tide_guild_diffs %>% g
+```
+
+
+```{r guild-plot}
+plot_dat <- tide_guild_diffs %>% 
+  tidyr::gather(tide_hl, proportion, low, high) %>% 
+  mutate(tide_hl = factor(tide_hl, levels = c("low", "high"))) %>% 
+  mutate(tide_hl_num = as.numeric(tide_hl)) 
+
+plot_dat %>% 
+  ggplot(aes(x = tide_hl_num, y = proportion)) +
+  geom_line(aes(color = guild)) +
+  geom_point(aes(color = guild), size = 3) +
+  geom_text(data = subset(plot_dat, tide_hl_num == 1), aes(label = guild, color = guild), 
+            size = 3, hjust = 1.15, fontface = "bold") +
+  geom_text(data = subset(plot_dat, tide_hl_num == 2), aes(label = guild, color = guild), 
+            size = 3, hjust = -0.15, fontface = "bold") +
+  facet_wrap(~island) + 
+  medium_fonts +
+  theme(strip.text.x = ggplot2::element_text(size = 10), 
+        legend.position = "none") +
+  scale_x_continuous(limits = c(0.0, 3), breaks = c(1,2), labels = c("low", "high"), minor_breaks = NULL) +
+  labs(x = "Tide", y = "Frequency Individual is Observed", 
+       title = "Guild Representation at Low vs. High Tide", 
+       caption = "All Guilds Shown")
+
+plot_dat %>% 
+  select(guild, difference, conf.low, conf.high) %>% 
+  distinct() %>% # dedup bc each difference is in there twice
+  ggplot(aes(x = reorder(guild, difference), y = difference)) +
+  geom_bar(stat = "identity") + 
+  geom_errorbar(aes(ymin = -conf.low, ymax = -conf.high), width = 0.2) +
+  facet_wrap(~island) + 
+  medium_fonts +
+  coord_flip() +
+  labs(x = "", y = "Difference (Low - High)", 
+       title = "Difference in Guild Representation bet. Low & High Tide",
+       subtitle = "Positive Values: more at low tide")
+```
+
+
+# Changes over time
 
 Timeline
 
@@ -440,26 +473,34 @@ sp_count <- dat %>%
   mutate(month_no = factor(lubridate::month(obs_date)))
 ```
   
-High-level plots:
+## High-level ts {.tabset}
 
+- all decreasing, esp since 2014
+- Aramburu decreased less
+
+### Species Count
 ```{r sp-count-ts-plot}  
 sp_count %>% 
   ggplot(aes(x = obs_date, y = n_species, group = tide_hl)) +
   geom_vline(xintercept = as.Date("2011-09-01")) +
   geom_vline(xintercept = as.Date("2012-09-01")) +
   geom_point(aes(color = tide_hl), size = 1, alpha = 0.8) +
-  geom_smooth(aes(color = tide_hl)) +
+  geom_smooth(aes(color = tide_hl, fill = tide_hl)) +
   # medium_fonts +
   theme_bw() +
   facet_wrap(~island) +
   labs(title = "Species Count")
+```
 
+### Individual Count
+
+```{r ind-count-ts-plot}
 sp_count %>% 
   ggplot(aes(x = obs_date, y = n_individuals, group = tide_hl)) +
   geom_vline(xintercept = as.Date("2011-09-01")) +
   geom_vline(xintercept = as.Date("2012-09-01")) +
   geom_point(aes(color = tide_hl), size = 1, alpha = 0.8) +
-  geom_smooth(aes(color = tide_hl)) +
+  geom_smooth(aes(color = tide_hl, fill = tide_hl)) +
   # medium_fonts +
   theme_bw() +
   scale_y_log10(limits = c(NA, 2000)) +
@@ -467,13 +508,14 @@ sp_count %>%
   labs(title = "Individual Count", y = "log10(n_individuals)")
 ```
 
-```{r sp-count-ts-samples}
+```{r sp-count-ts-samples, include = F, echo = F}
 sp_count %>% 
   group_by(epoch) %>% 
   summarize(n_samples = length(unique(obs_date)))
 ```
 
-## Species count
+## Aggregate Species Count
+
 ```{r sp-count-ts-hist}
 sp_count %>% 
   subset(epoch %in% c("before", "after")) %>% 
@@ -606,3 +648,154 @@ sp_abundance_for_model %>%
   geom_point(aes(color = island)) +
   geom_abline() 
 ```
+
+## Indiv. Species 
+
+- Fit model; Aramburu only. 
+- Significant interactions between epoch and species means that there was a significant change.
+- Not really enough data to talk about individual species.
+- NB this is a lower bound on variance, we should really be comparing to Pickleweed or Unnamed, in which case the variance here would be added to the variance of Pickleweed or Unnamed Island 
+
+```{r indiv-sp-count-lm}
+# library(lme4) # not used
+
+# number of individuals per species, per date, isle, tide (grouped across observers, behaviors, positions, comments, etc.)
+tide_qty_per_sp_ar <- dat %>% 
+  # choose only Aramburu birds
+  subset(island == "Aramburu") %>% 
+  subset(epoch %in% c("before", "after")) %>% 
+  subset(tide_hl %in% c("low", "high")) %>%
+  subset(is_bird) %>% 
+  # summarize to get total quantity of a species
+  group_by(obs_date, island, epoch, tide_hl, common) %>% 
+  summarize(qty = sum(qty, na.rm = T)) %>% 
+  mutate(month_no = factor(lubridate::month(obs_date)))
+
+lm_nind <- lm(qty ~ 
+                + epoch
+                + common
+                + month_no
+                + tide_hl
+                + epoch:common
+                # + (1 | common) # ICC = .10 w/ lmer
+                , 
+             data = tide_qty_per_sp_ar)
+
+# summary(lm_nind)
+
+nind_coeff <- broom::tidy(lm_nind) 
+```
+
+
+```{r indiv-sp-count-plot, fig.height = 6, fig.width=6}
+nind_coeff %>% 
+  subset(grepl("epochafter:common", term)) %>% 
+  mutate(species = gsub("epochafter:common", "", term)) %>% 
+  # arrange(estimate) %>% 
+  ggplot(aes(x = reorder(species, estimate), y = estimate)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error)) +
+  coord_flip() +
+  theme_bw() + 
+  labs(x = "", y = "", 
+       title = "Aramburu: Individuals of each species after vs. before improvements",
+       subtitle = "positive values: more individuals after improvements")
+```
+
+
+## Guilds
+
+- Fit model; Aramburu only. 
+- Significant interactions between epoch and species means that there was a significant change.
+- Not really enough data to talk about guilds either
+
+```{r guild-count-lm}
+# library(lme4) # not used
+
+# number of individuals per species, per date, isle, tide (grouped across observers, behaviors, positions, comments, etc.)
+tide_qty_per_guild_ar <- dat %>% 
+  # choose only Aramburu birds
+  subset(island == "Aramburu") %>% 
+  subset(epoch %in% c("before", "after")) %>% 
+  subset(tide_hl %in% c("low", "high")) %>%
+  subset(is_bird) %>% 
+  # summarize to get total quantity of a species
+  group_by(obs_date, island, epoch, tide_hl, guild) %>% 
+  summarize(qty = sum(qty, na.rm = T)) %>% 
+  mutate(month_no = factor(lubridate::month(obs_date)))
+
+lm_nguild <- lm(qty ~ 
+                + epoch
+                + guild
+                + month_no
+                + tide_hl
+                + epoch:guild
+                # + (1 | common) # ICC = .10 w/ lmer; not used
+                , 
+             data = tide_qty_per_guild_ar)
+
+# summary(lm_nind)
+
+nguild_coeff <- broom::tidy(lm_nguild) 
+```
+
+
+```{r guild-count-plot}
+nguild_coeff %>% 
+  subset(grepl("epochafter:guild", term)) %>% 
+  mutate(guild = gsub("epochafter:guild", "", term)) %>% 
+  # arrange(estimate) %>% 
+  ggplot(aes(x = reorder(guild, estimate), y = estimate)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error)) +
+  # coord_flip() +
+  theme_bw() + 
+  labs(x = "", y = "", 
+       title = "Aramburu: Individuals of each guild after vs. before improvements",
+       subtitle = "positive values: more individuals after improvements")
+```
+
+## Behaviors
+```{r}
+behaviors <- dat %>% 
+  # choose only Aramburu birds
+  subset(island == "Aramburu") %>% 
+  subset(epoch %in% c("before", "after")) %>% 
+  subset(tide_hl %in% c("low", "high")) %>%
+  subset(is_bird) %>% 
+  # summarize to get total quantity of a species
+  group_by(obs_date, island, epoch, tide_hl, common, behavior) %>% 
+  summarize(qty = sum(qty, na.rm = T)) %>% 
+  mutate(month_no = factor(lubridate::month(obs_date)))
+
+lm_behav <- lm(qty ~ 
+                + epoch
+                + behavior
+                + month_no
+                + tide_hl
+                # + common
+                + epoch:behavior
+                # + (1 | common) # ICC = .10 w/ lmer
+                , 
+             data = behaviors)
+
+behav_coeff <- broom::tidy(lm_behav) 
+
+summary(lm_behav)
+```
+
+```{r}
+behav_coeff %>% 
+  subset(grepl("epochafter:behavior", term)) %>% 
+  mutate(behavior = tolower(gsub("epochafter:behavior", "", term))) %>% 
+  left_join(behavior_key, by = c("behavior" = "short_name")) %>% 
+  ggplot(aes(x = reorder(long_name, estimate), y = estimate)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error), width = 0.2) +
+  geom_label(aes(label =  sprintf("%2.2f", estimate))) +
+  theme_bw() + 
+  labs(x = "", y = "", 
+       title = "Aramburu: Behavior after vs. before improvements",
+       subtitle = "positive values: more of the behavior after improvements")
+```
+
