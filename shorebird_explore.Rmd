@@ -835,7 +835,7 @@ tide_qty_per_sp_ar <- dat %>%
   mutate(month_no = factor(lubridate::month(obs_date)))
 
 lm_nind <- lm(qty ~ 
-                + epoch
+              + epoch
               + common
               + month_no
               + tide_hl
@@ -1105,6 +1105,93 @@ island_diffs %>%
        subtitle = "Positive Values: more at Aramburu",
        caption = "data 2009-2018")
 
+```
+
+# Focal Species
+```{r}
+focal_species <- c("American Wigeon", "Caspian Tern", "Elegant Tern", "Least Sandpiper", "Spotted Sandpiper", "Marbled Godwit", "Long-billed Curlew", "Black-necked Stilt")
+
+focal_counts <- dat %>% 
+  # choose only Aramburu
+  subset(island == "Aramburu") %>% 
+  subset(tide_hl %in% c("low", "high")) %>%
+  subset(!grepl(pattern = "Unidentif", x = common)) %>% 
+  select(obs_date, island, tide_hl,common, qty
+         # isle, position
+         ) %>% 
+  group_by(obs_date, island, tide_hl, common) %>% 
+  summarize(qty = sum(qty, na.rm = T)) %>% 
+  ungroup() %>% 
+  tidyr::spread(common, qty) %>% 
+  tidyr::gather(common, qty, -obs_date, -island, -tide_hl) %>% 
+  replace_na(list(qty = 0)) %>% 
+  mutate(was_observed = ifelse(qty>0,1,0)) %>% 
+  mutate(year_no = lubridate::year(obs_date)) %>% 
+  group_by(year_no, island, tide_hl, common) %>% 
+  summarize(p_present = mean(was_observed),
+            n_present = mean(qty)) %>% 
+  subset(common %in% focal_species) 
+```
+
+## frequency of sightings
+
+```{r}
+focal_counts %>% 
+  subset(tide_hl == "low") %>% 
+  ggplot(aes(x = year_no, y = p_present, color = common)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~common) + 
+  theme_bw() +
+  theme(legend.position = "right") +
+  labs(x = "Year", y = "fraction of surveys", title = "Aramburu: Frequency of Each Species Being Present")
+```
+
+## total number of individuals
+```{r}
+focal_counts %>% 
+  subset(tide_hl == "low") %>% 
+  ggplot(aes(x = year_no, y = n_present, color = common)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~common) + 
+  theme_bw() +
+  theme(legend.position = "right") +
+  labs(x = "Year", y = "number of individuals", title = "Aramburu: Average Number of Individuals Present")
+```
+
+## usage of different habitat
+```{r}
+focal_species_habitat <- dat %>% 
+  # choose only Aramburu
+  subset(island == "Aramburu") %>% 
+  subset(epoch %in% c("before", "after")) %>% 
+  subset(tide_hl %in% c("low", "high")) %>%
+  subset(!grepl(pattern = "Unidentif", x = common)) %>% 
+  subset(tide_hl == "low") %>% 
+  select(epoch, island, position, common, qty
+         # isle, position
+         ) %>% 
+  group_by(epoch, island, position, common) %>% 
+  summarize(qty = sum(qty, na.rm = T)) %>% 
+  ungroup() %>% 
+  group_by(epoch, island, common, position) %>%
+  summarize(n_present = mean(qty)) %>% 
+  mutate(p_sp_on_habitat = n_present / sum(n_present)) %>% 
+  subset(common %in% focal_species) %>% 
+  left_join(position_key, by = c("position" = "short_name"))
+```
+
+```{r}
+focal_species_habitat %>% 
+  subset(!is.na(long_name)) %>% 
+  ggplot(aes(x = epoch, y = p_sp_on_habitat, fill = long_name)) +
+  geom_bar(stat = "identity") + 
+  facet_wrap(~common) + 
+  theme_bw() +
+  theme(legend.title = element_blank()) + 
+  scale_y_continuous(breaks = c(0,1)) +
+  labs(x = "Before/After Restoration", y = "frequency on habitat", title = "Aramburu: Fractional Use of Habitat Before vs. After Restoration")
 ```
 
 
