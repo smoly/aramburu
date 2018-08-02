@@ -21,6 +21,7 @@ knitr::opts_chunk$set(echo = FALSE,
                       message = FALSE)
 
 library(dplyr)
+library(ggplot2)
 library(RColorBrewer)
 library(lubridate)
 library(readxl)
@@ -161,7 +162,7 @@ if (refresh) {
            grebes = grepl("x", tolower(grebes))
     ) %>% 
     
-    # Make MECE guild column:
+    # Make MECE guild column (this will further be edited later)
     # In this data all peeps are also shorebirds and there's no "other" 
     # NB should not have any peeps bc classified as shorebirds
     mutate(guild = ifelse(shorebirds, "shorebirds", 
@@ -169,7 +170,7 @@ if (refresh) {
                                  ifelse(gulls, "gulls", 
                                         ifelse(terns, "terns", 
                                                ifelse(wading, "wading", 
-                                                      ifelse(grebes, "grebes", "other"))))))
+                                                      ifelse(grebes, "grebes", NA))))))
     ) %>% 
     
     # clean up behaviors:
@@ -190,12 +191,89 @@ if (refresh) {
     mutate(island = ifelse(tolower(isle) %in% c("as", "ac", "an"), "Aramburu", 
                            ifelse(tolower(isle) %in% c("p"), "Pickleweed", "Unnamed")))
   
+  # Fill in Guild:
+  # guilds of birds with no guild listed in data
+  guild_lookup_list <- c("American Coot" = "water_fowl",
+                         "American Crow" = "corvid", 
+                         "American Robin" = "land_bird",
+                         "American Wigeon" = "water_fowl",
+                         "Bald Eagle" = "land_bird",
+                         "Barn Swallow" = "land_bird",
+                         "Belted Kingfisher" = "land_bird",
+                         "Black Phoebe" = "land_bird",
+                         "Brant" = "water_fowl",
+                         "Brown Pelican" = "pelicaniformes",
+                         "Bufflehead" = "water_fowl",
+                         "Cackling Goose" = "water_fowl",
+                         "Canada Goose" = "water_fowl",
+                         "Canvasback" = "water_fowl",
+                         "Cliff Swallow" = "land_bird",
+                         "Common Goldeneye" = "water_fowl",
+                         "Common Loon" = "water_fowl",
+                         "Common Raven" = "corvid",
+                         "Double-crested Cormorant" = "pelicaniformes",
+                         "Gadwall" = "water_fowl",
+                         "Greater Pewee" = "land_bird",
+                         "Greater Scaup" = "water_fowl",
+                         "Greater/Lesser Scaup" = "water_fowl",
+                         "Green-winged Teal" = "water_fowl",
+                         "Lesser Scaup" = "water_fowl",
+                         "Loggerhead Shrike" = "land_bird",
+                         "Mallard" = "water_fowl",
+                         "Northern Flicker" = "land_bird",
+                         "Northern Mockingbird" = "land_bird",
+                         "Northern Pintail" = "water_fowl",
+                         "Northern Shoveler" = "water_fowl",
+                         "Osprey" = "land_bird",
+                         "Pacific Loon" = "water_fowl",
+                         "Pelagic Cormorant" = "pelicaniformes",
+                         "Peregrine Falcon" = "land_bird",
+                         "Red-breasted Merganser" = "water_fowl",
+                         "Red-shouldered Hawk" = "land_bird",
+                         "Red-tailed Hawk" = "land_bird",
+                         "Red-throated Loon" = "water_fowl",
+                         "Rock Pigeon" = "water_fowl",
+                         "Ruddy Duck" = "water_fowl",
+                         "Say's Phoebe" = "land_bird",
+                         "Song Sparrow" = "land_bird",
+                         "Surf Scoter" = "water_fowl",
+                         "Turkey Vulture" = "land_bird",
+                         # "Unidentifiable Bird" = "",
+                         "Unidentifiable Cormorant" = "water_fowl",
+                         "Unidentifiable Duck" = "water_fowl",
+                         "Unidentifiable Loon" = "water_fowl",
+                         "Western Bluebird" = "land_bird",
+                         "Western Meadowlark" = "land_bird",
+                         "Western Scrub-Jay" = "corvid",
+                         "White-tailed Kite" = "land_bird")
+  
+  guild_lookup <- data.frame(common = names(guild_lookup_list), 
+                             guild = as.vector(guild_lookup_list)) %>% 
+    bind_rows(dat %>% 
+                subset(!is.na(guild)) %>%
+                distinct(common, guild)) %>% 
+    rename(derived_guild = guild)
+  
+  dat <- dat %>%
+    left_join(guild_lookup, by = "common") %>%
+    mutate(new_guild = ifelse(is.na(guild), derived_guild, guild)) %>% 
+    select(-guild, -derived_guild) %>% 
+    rename(guild = new_guild)
+  
   saveRDS(dat, "data/dat.rds")
 } else {
   dat <- readRDS("data/dat.rds")  
 }
-  
-dat %>% g
+
+
+
+
+
+
+
+
+
+# dat %>% g
 ```
 
 # Basic EDA
@@ -355,8 +433,8 @@ plot_dat %>%
   geom_point(aes(color = common), size = 3) +
   geom_text(data = subset(plot_dat, tide_hl_num == 1), aes(label = common, color = common), 
             size = 3, hjust = 1.15, fontface = "bold") +
-   geom_text(data = subset(plot_dat, tide_hl_num == 2), aes(label = common, color = common), 
-             size = 3, hjust = -0.15, fontface = "bold") +
+  geom_text(data = subset(plot_dat, tide_hl_num == 2), aes(label = common, color = common), 
+            size = 3, hjust = -0.15, fontface = "bold") +
   facet_wrap(~diff_type) + 
   medium_fonts +
   theme(strip.text.x = ggplot2::element_text(size = 10), 
@@ -457,9 +535,9 @@ Timeline
 - fall 2011: shoreline enhancements
 - summer 2012: wetland & terrestrial enhancements
 - tldr:
-    - `before`: before fall 2011
-    - `construction`: fall 2011 - summer 2012 (??)
-    - `after`: after Sept 2012
+- `before`: before fall 2011
+- `construction`: fall 2011 - summer 2012 (??)
+- `after`: after Sept 2012
 
 From JK: "shoreline enhancement elements of the project were constructed in the fall of 2011, so I would say, starting January 2012, any data collected would be “post” construction.  The wetland and terrestrial enhancement elements on the island terrace were constructed in the summer of 2012. So there are sort of two “post” restoration periods. But because the shorebird surveys are only along the eastern shoreline, I would stick with Jan 2012 on as “post” restoration."
 
@@ -480,7 +558,7 @@ sp_count <- dat %>%
   mutate(epoch = factor(epoch, levels = c("before", "construction", "after"))) %>% 
   mutate(month_no = factor(lubridate::month(obs_date)))
 ```
-  
+
 ## High-level ts {.tabset}
 
 - all decreasing, esp since 2014
@@ -552,7 +630,7 @@ Fit lm to control for counfounding:
 sp_count_for_model <- sp_count %>% 
   subset(epoch %in% c("before", "after")) %>% 
   subset(!is.na(n_species))
-  
+
 lm_nsp <- lm(n_species ~ epoch 
              + island 
              + epoch:island 
@@ -579,8 +657,8 @@ delta_aramburu <- (mean(predict(lm_nsp, newdata = sp_count_for_model %>%
                                   mutate(island = "Aramburu", 
                                          epoch = "after")))) - 
   (mean(predict(lm_nsp, newdata = sp_count_for_model %>% 
-                   mutate(island = "Aramburu", 
-                          epoch = "before")))) 
+                  mutate(island = "Aramburu", 
+                         epoch = "before")))) 
 
 delta_pickleweed <- (mean(predict(lm_nsp, newdata = 
                                     sp_count_for_model %>% 
@@ -616,6 +694,7 @@ sp_count %>%
   facet_grid(tide_hl~island) +
   scale_fill_manual(values = condition_colors) +
   scale_x_log10() +
+  # xlim(0,1000) +
   theme_bw() +
   labs(title = "Individuals Count",
        x = "individuals observed",
@@ -631,14 +710,14 @@ sp_abundance_for_model <- sp_count %>%
   subset(!is.na(n_individuals)) %>% 
   mutate(n_individuals_log10 = log10(n_individuals + 0.001)) %>% 
   mutate(log_0_flag = n_individuals == 0)
-  
+
 lm_nindiv <- lm(n_individuals_log10 ~  
-             + log_0_flag
-             + island 
-             + epoch:island 
-             + tide_hl
-             + month_no, 
-             data = sp_abundance_for_model)
+                  + log_0_flag
+                + island 
+                + epoch:island 
+                + tide_hl
+                + month_no, 
+                data = sp_abundance_for_model)
 
 summary(lm_nindiv)
 
@@ -681,13 +760,13 @@ tide_qty_per_sp_ar <- dat %>%
 
 lm_nind <- lm(qty ~ 
                 + epoch
-                + common
-                + month_no
-                + tide_hl
-                + epoch:common
-                # + (1 | common) # ICC = .10 w/ lmer
-                , 
-             data = tide_qty_per_sp_ar)
+              + common
+              + month_no
+              + tide_hl
+              + epoch:common
+              # + (1 | common) # ICC = .10 w/ lmer
+              , 
+              data = tide_qty_per_sp_ar)
 
 # summary(lm_nind)
 
@@ -733,14 +812,14 @@ tide_qty_per_guild_ar <- dat %>%
   mutate(month_no = factor(lubridate::month(obs_date)))
 
 lm_nguild <- lm(qty ~ 
-                + epoch
+                  + epoch
                 + guild
                 + month_no
                 + tide_hl
                 + epoch:guild
                 # + (1 | common) # ICC = .10 w/ lmer; not used
                 , 
-             data = tide_qty_per_guild_ar)
+                data = tide_qty_per_guild_ar)
 
 # summary(lm_nind)
 
@@ -777,15 +856,15 @@ behaviors <- dat %>%
   mutate(month_no = factor(lubridate::month(obs_date)))
 
 lm_behav <- lm(qty ~ 
-                + epoch
-                + behavior
-                + month_no
-                + tide_hl
-                # + common
-                + epoch:behavior
-                # + (1 | common) # ICC = .10 w/ lmer
-                , 
-             data = behaviors)
+                 + epoch
+               + behavior
+               + month_no
+               + tide_hl
+               # + common
+               + epoch:behavior
+               # + (1 | common) # ICC = .10 w/ lmer
+               , 
+               data = behaviors)
 
 behav_coeff <- broom::tidy(lm_behav) 
 
