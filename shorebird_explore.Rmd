@@ -265,15 +265,7 @@ if (refresh) {
   dat <- readRDS("data/dat.rds")  
 }
 
-
-
-
-
-
-
-
-
-# dat %>% g
+dat %>% g
 ```
 
 # Basic EDA
@@ -753,6 +745,7 @@ tide_qty_per_sp_ar <- dat %>%
   subset(epoch %in% c("before", "after")) %>% 
   subset(tide_hl %in% c("low", "high")) %>%
   subset(is_bird) %>% 
+  subset(!grepl(pattern = "Unidentif", x = common)) %>% 
   # summarize to get total quantity of a species
   group_by(obs_date, island, epoch, tide_hl, common) %>% 
   summarize(qty = sum(qty, na.rm = T)) %>% 
@@ -884,5 +877,31 @@ behav_coeff %>%
   labs(x = "", y = "", 
        title = "Aramburu: Behavior after vs. before improvements",
        subtitle = "positive values: more of the behavior after improvements")
+```
+
+# Outputs
+
+## Table w avg species count/survey, by year
+
+Save csv to data directory
+```{r}
+dat %>% 
+  group_by(obs_date, island, tide_hl, common) %>% 
+  summarize(qty = sum(qty)) %>% 
+  # fill qty with 0s when bird was not recorded on a given day:
+  tidyr::spread(common, qty) %>% 
+  tidyr::gather(common, qty, -obs_date, -island, -tide_hl) %>% 
+  replace_na(list(qty = 0)) %>% 
+  mutate(year = lubridate::year(obs_date)) %>% 
+  group_by(island, year, tide_hl, common) %>% 
+  summarize(mean_observed = mean(qty)) %>% 
+  subset(common != "<NA>") %>% 
+  subset(!is.na(year)) %>% 
+  subset(tide_hl %in% c("low", "high")) %>% #exclude "mid"
+  tidyr::spread(year, mean_observed) %>% 
+  arrange(island, tide_hl) %>% 
+  write.csv("data/species_count_by_year.csv", row.names = FALSE)
+  
+
 ```
 
