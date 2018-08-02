@@ -76,6 +76,7 @@ EDA of shorebird data on Aramburu Island following shoreline, wetland, & terrest
 
 - no obs in 1H 2009, 2H 2012, 2H 2015, and all of 2017
 - Observations usually made on all islands on same day and both high and low tide.
+- When a bird was not present there is usaally no entry, so need to make sure to fill with 0s. i.e. can't just average because 0-days won't be counted.
 - A bird may have multiple rows per observation bc of different behaviors, positions, comments, etc. so important to group by species when doing presence counts.
 - NB sometimes we analyze species **presence** (was there/was not) and sometimes individual **count** (how many)
 
@@ -179,6 +180,16 @@ if (refresh) {
                                     ifelse(behavior %in% c("R/F", "F/R"), "R/F", 
                                            ifelse(behavior %in% c("?", "FLYOVER"), NA, behavior))))) %>% 
     mutate(behavior = factor(behavior, levels = c("O", "F", "R", "R/F", ""))) %>% 
+    
+    # position/habitat
+    mutate(position = tolower(position)) %>% 
+    mutate(position = 
+             ifelse(position %in% c("fv", "v,rs", "v/sw"), "v", 
+                    ifelse(position %in% c("m/sw", "m, sw"), "m", 
+                           ifelse(position %in% c("rs,sw,fw", "s", "r"), "rs", 
+                                  ifelse(position %in% c("sw, m", "sw,m"), "sw", 
+                                         ifelse(position %in% c("fw/v", "w", "fo"), "fw", 
+                                                ifelse(position %in% c("?", "o", "fly over", "other"), NA, position))))))) %>% 
     
     # tide 
     mutate(tide_hl = gsub('"', "", tolower(tide_hl))) %>% 
@@ -535,13 +546,28 @@ From JK: "shoreline enhancement elements of the project were constructed in the 
 
 
 ```{r sp-count-ts}
-sp_count <- dat %>% 
+sp_count_island <- dat %>% 
   subset(tide_hl %in% c("low", "high")) %>%
   subset(is_bird) %>% 
   group_by(obs_date, island, tide_hl, common) %>% 
   summarize(qty = sum(qty, na.rm = T)) %>% 
   mutate(species_observed_flag = ifelse(qty > 0, 1, 0)) %>% 
   group_by(obs_date, island, tide_hl) %>%
+  summarize(n_species = sum(species_observed_flag),
+            n_individuals = sum(qty)) %>% 
+  ungroup() %>% 
+  mutate(epoch = ifelse(obs_date < "2011-09-01", "before", 
+                        ifelse(obs_date < "2012-09-01", "construction", "after"))) %>% 
+  mutate(epoch = factor(epoch, levels = c("before", "construction", "after"))) %>% 
+  mutate(month_no = factor(lubridate::month(obs_date)))
+
+sp_count_isle <- dat %>% 
+  subset(tide_hl %in% c("low", "high")) %>%
+  subset(is_bird) %>% 
+  group_by(obs_date, isle, tide_hl, common) %>% 
+  summarize(qty = sum(qty, na.rm = T)) %>% 
+  mutate(species_observed_flag = ifelse(qty > 0, 1, 0)) %>% 
+  group_by(obs_date, isle, tide_hl) %>%
   summarize(n_species = sum(species_observed_flag),
             n_individuals = sum(qty)) %>% 
   ungroup() %>% 
@@ -556,9 +582,11 @@ sp_count <- dat %>%
 - all decreasing, esp since 2014
 - Aramburu decreased less
 
-### Species Count
+### Species Count {.tabset}
+
+#### by island
 ```{r sp-count-ts-plot}  
-sp_count %>% 
+sp_count_island %>% 
   ggplot(aes(x = obs_date, y = n_species, group = tide_hl)) +
   geom_vline(xintercept = as.Date("2011-09-01")) +
   geom_vline(xintercept = as.Date("2012-09-01")) +
@@ -570,10 +598,37 @@ sp_count %>%
   labs(title = "Species Count")
 ```
 
-### Individual Count
+#### by isle
+```{r}
+sp_count_isle %>% 
+  subset(isle %in% c("AC", "AN", "AS")) %>% 
+  ggplot(aes(x = obs_date, y = n_species, group = tide_hl)) +
+  geom_vline(xintercept = as.Date("2011-09-01")) +
+  geom_vline(xintercept = as.Date("2012-09-01")) +
+  geom_point(aes(color = tide_hl), size = 1, alpha = 0.8) +
+  geom_smooth(aes(color = tide_hl, fill = tide_hl)) +
+  # medium_fonts +
+  theme_bw() +
+  facet_wrap(~isle) +
+  labs(title = "Species Count")
 
+sp_count_isle %>% 
+  subset(isle %in% c("AC", "AN", "AS")) %>% 
+  ggplot(aes(x = isle, y = n_species, group = isle)) +
+  geom_boxplot() +
+  medium_fonts +
+  labs(x = "",
+       y = "Number of Species Observed", 
+       title = "Aramburu: Species Observed per Survey", 
+       caption = "data 2009-2018")
+```
+
+
+### Individual Count {.tabset}
+
+#### by island
 ```{r ind-count-ts-plot}
-sp_count %>% 
+sp_count_island %>% 
   ggplot(aes(x = obs_date, y = n_individuals, group = tide_hl)) +
   geom_vline(xintercept = as.Date("2011-09-01")) +
   geom_vline(xintercept = as.Date("2012-09-01")) +
@@ -586,8 +641,36 @@ sp_count %>%
   labs(title = "Individual Count", y = "log10(n_individuals)")
 ```
 
+#### by isle
+```{r}
+sp_count_isle %>% 
+  subset(isle %in% c("AC", "AN", "AS")) %>% 
+  ggplot(aes(x = obs_date, y = n_individuals, group = tide_hl)) +
+  geom_vline(xintercept = as.Date("2011-09-01")) +
+  geom_vline(xintercept = as.Date("2012-09-01")) +
+  geom_point(aes(color = tide_hl), size = 1, alpha = 0.8) +
+  geom_smooth(aes(color = tide_hl, fill = tide_hl)) +
+  # medium_fonts +
+  theme_bw() +
+  scale_y_log10(limits = c(NA, 2000)) +
+  facet_wrap(~isle) +
+  labs(title = "Individual Count", y = "log10(n_individuals)")
+
+sp_count_isle %>% 
+  subset(isle %in% c("AC", "AN", "AS")) %>% 
+  ggplot(aes(x = isle, y = n_individuals, group = isle)) +
+  geom_boxplot() +
+  # geom_density(aes(fill = isle), alpha = 0.8)+
+  medium_fonts +
+  scale_y_log10() +
+  labs(x = "",
+       y = "Number of Individuals Observed (log10)", 
+       title = "Aramburu: Individuals Observed per Survey", 
+       subtitle = "note log scale", caption = "data 2009-2018")
+```
+
 ```{r sp-count-ts-samples, include = F, echo = F}
-sp_count %>% 
+sp_count_island %>% 
   group_by(epoch) %>% 
   summarize(n_samples = length(unique(obs_date)))
 ```
@@ -595,7 +678,7 @@ sp_count %>%
 ## Aggregate Species Count
 
 ```{r sp-count-ts-hist}
-sp_count %>% 
+sp_count_island %>% 
   subset(epoch %in% c("before", "after")) %>% 
   ggplot(aes(n_species, group = interaction(island, epoch, tide_hl))) +
   # geom_bar(aes(fill = epoch), position = "dodge") +
@@ -606,7 +689,7 @@ sp_count %>%
   labs(title = "Species Count",
        x = "number of species observed")
 
-# sp_count %>% 
+# sp_count_island %>% 
 #   subset(obs_date < as.Date("2017-01-01")) %>% 
 #   subset(epoch %in% c("before", "after")) %>% 
 #   ggplot(aes(n_species, group = interaction(island, epoch, tide_hl))) +
@@ -619,7 +702,7 @@ sp_count %>%
 
 Fit lm to control for counfounding:
 ```{r sp-count-ts-lm}
-sp_count_for_model <- sp_count %>% 
+sp_count_for_model <- sp_count_island %>% 
   subset(epoch %in% c("before", "after")) %>% 
   subset(!is.na(n_species))
 
@@ -678,7 +761,7 @@ sp_count_for_model %>%
 
 ## Individual Abundance
 ```{r indiv-count-ts}
-sp_count %>% 
+sp_count_island %>% 
   subset(epoch %in% c("before", "after")) %>% 
   ggplot(aes(n_individuals, group = interaction(island, epoch, tide_hl))) +
   # geom_bar(aes(fill = epoch), position = "dodge") +
@@ -697,7 +780,7 @@ Fit lm to control for counfounding:
 NB: log10!
 
 ```{r indiv-count-lm}
-sp_abundance_for_model <- sp_count %>% 
+sp_abundance_for_model <- sp_count_island %>% 
   subset(epoch %in% c("before", "after")) %>% 
   subset(!is.na(n_individuals)) %>% 
   mutate(n_individuals_log10 = log10(n_individuals + 0.001)) %>% 
@@ -827,7 +910,7 @@ nguild_coeff %>%
   # arrange(estimate) %>% 
   ggplot(aes(x = reorder(guild, estimate), y = estimate)) +
   geom_bar(stat = "identity") +
-  geom_errorbar(aes(ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error)) +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error), width = 0.2) +
   # coord_flip() +
   theme_bw() + 
   labs(x = "", y = "", 
@@ -879,11 +962,158 @@ behav_coeff %>%
        subtitle = "positive values: more of the behavior after improvements")
 ```
 
+## Habitats
+```{r}
+# fraction of each guild that's on a particular habitat, per island per year
+habitats <- dat %>% 
+  group_by(island, year, guild, position) %>% 
+  summarize(qty = sum(qty)) %>% 
+  mutate(p_guild = qty/sum(qty)) %>% 
+  ungroup() %>% 
+  left_join(position_key, by = c("position" = "short_name"))
+
+```
+
+```{r fig.width = 6, fig.height = 6}
+habitats %>% 
+  subset(island != "Unnamed") %>% 
+  subset(!is.na(guild)) %>% 
+  subset(!is.na(long_name)) %>% 
+  tidyr::spread(long_name, p_guild) %>%
+  tidyr::gather(long_name, p_guild, -island, -year, -guild, -position, -qty) %>% 
+  replace_na(list(p_guild = 0)) %>% 
+  ggplot(aes(x = year, y = p_guild, fill = long_name, color = long_name)) +
+  geom_bar(stat = "identity", position = "stack") +
+  # geom_area(position = "stack") +
+  # geom_line() +
+  facet_grid(guild~island) +
+  theme(legend.position = "right") + 
+  medium_fonts +
+  scale_y_continuous(breaks = c(0,1)) +
+  labs(title = "Habitat Choices Over Time", x = "Year", y = "Fraction of Guild on Habitat")
+```
+
+```{r fig.width = 6, fig.height = 6}
+dat %>% 
+  subset(year >= 2013) %>% 
+  subset(!(guild %in% c("gulls", "pelicaniformes"))) %>% # missing some data?
+  group_by(island, guild, position) %>% 
+  summarize(qty = sum(qty)) %>% 
+  mutate(p_guild = qty/sum(qty)) %>% 
+  ungroup() %>% 
+  left_join(position_key, by = c("position" = "short_name")) %>% 
+  subset(island != "Unnamed") %>% 
+  subset(!is.na(guild)) %>% 
+  subset(!is.na(long_name)) %>% 
+  tidyr::spread(long_name, p_guild) %>%
+  tidyr::gather(long_name, p_guild, -island, -guild, -position, -qty) %>% 
+  replace_na(list(p_guild = 0)) %>% 
+  ggplot(aes(x = island, y = p_guild, fill = long_name, color = long_name)) +
+  geom_bar(stat = "identity", position = "stack") +
+  # geom_area(position = "stack") +
+  # geom_line() +
+  facet_grid(guild~.) +
+  theme(legend.position = "right") + 
+  medium_fonts+
+  # theme(plot.margin=unit(c(1, 20, 0.5, 0.5), "lines"))
+  labs(title = "Habitat Choices", subtitle = "Since", x = "", y = "Fraction of Guild on Habitat")
+
+# dat %>% 
+#   subset(year >= 2013) %>% 
+#   subset(!(guild %in% c("gulls", "pelicaniformes"))) %>% # missing some data?
+#   group_by(island, guild, position) %>% 
+#   summarize(qty = sum(qty)) %>% 
+#   mutate(p_guild = qty/sum(qty)) %>% 
+#   ungroup() %>% 
+#   left_join(position_key, by = c("position" = "short_name")) %>% 
+#   subset(island != "Unnamed") %>% 
+#   subset(!is.na(guild)) %>% 
+#   subset(!is.na(long_name)) %>% 
+#   tidyr::spread(long_name, p_guild) %>%
+#   tidyr::gather(long_name, p_guild, -island, -guild, -position, -qty) %>% 
+#   replace_na(list(p_guild = 0)) %>% 
+#   mutate(island = factor(island, levels = c("Aramburu", "Pickleweed"))) %>% 
+#   mutate(island_num = as.numeric(island)) %>% 
+#   
+#   ggplot(aes(x = island_num, y = p_guild, fill = long_name, color = long_name)) +
+#   # geom_bar(stat = "identity", position = "stack") +
+#   # geom_area(position = "stack") +
+#   geom_line() +
+#   facet_grid(guild~.) +
+#   theme(legend.position = "right") + 
+#   medium_fonts+
+#   # theme(plot.margin=unit(c(1, 20, 0.5, 0.5), "lines"))
+#   labs(title = "Habitat Choices Since 2013", x = "", y = "Fraction of Guild on Habitat")
+```
+
+# Island Species Compare: Ar vs Pi
+
+```{r island-diffs-sig}
+# this is exactly the same as "tide_qty" above
+island_qty <- tide_qty_per_sp %>% 
+  subset(island %in% c("Aramburu", "Pickleweed")) %>% 
+  group_by(island, tide_hl, common) %>% 
+  summarize(n_times_sp_observed = n()) %>% 
+  # fill missing values with 0s:
+  tidyr::spread(tide_hl, n_times_sp_observed) %>% # number times species was observed
+  replace_na(list(high = 0, low = 0)) %>% 
+  tidyr::gather(tide_hl, n_times_sp_observed, high, low) %>% 
+  left_join(
+    tide_qty_per_sp %>% 
+      group_by(island, tide_hl) %>% 
+      summarize(n_surveyed = length(unique(obs_date))),
+    by = c("island", "tide_hl")
+  ) 
+
+island_diffs <- island_qty %>% 
+  group_by(tide_hl, common) %>%
+  arrange(island) %>% 
+  do(tidy(prop.test(.$n_times_sp_observed, .$n_surveyed))) %>% 
+  rename(Aramburu = estimate1,
+         Pickleweed = estimate2)  %>%
+  mutate(difference = Aramburu - Pickleweed) # difference in whether bird was sighted on a survey between low & high tide
+```
+
+```{r island-diffs-plot, fig.width=7, fig.height=7}
+island_diffs %>% 
+  subset(!grepl("Unident", common)) %>% 
+  subset(tide_hl == "low") %>% 
+  subset(!is.na(difference)) %>%
+  subset(!is.na(common)) %>% 
+  ggplot(aes(x = reorder(common, difference), y = difference)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
+  coord_flip() +
+  theme_bw() +
+  # medium_fonts + 
+  labs(x = "", y = "More at Pickleweed ←                → More at Aramburu" ,       title = "Difference in Frequency of Species Observation",
+       subtitle = "Positive Values: more at Aramburu",
+       caption = "data 2009-2018")
+
+island_diffs %>% 
+  subset(!grepl("Unident", common)) %>% 
+  subset(tide_hl == "low") %>% 
+  subset(!is.na(difference)) %>%
+  subset(!is.na(common)) %>% 
+  ggplot(aes(x = reorder(common, difference), y = difference)) +
+  geom_bar(stat = "identity") +
+  # geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
+  coord_flip() +
+  theme_bw() +
+  # medium_fonts + 
+  labs(x = "", y = "More at Pickleweed ←                → More at Aramburu" ,       title = "Difference in Frequency of Species Observation",
+       subtitle = "Positive Values: more at Aramburu",
+       caption = "data 2009-2018")
+
+```
+
+
 # Outputs
 
 ## Table w avg species count/survey, by year
 
-Save csv to data directory
+Save csv to data directory (data/species_count_by_year.csv)
+
 ```{r}
 dat %>% 
   group_by(obs_date, island, tide_hl, common) %>% 
@@ -902,6 +1132,5 @@ dat %>%
   arrange(island, tide_hl) %>% 
   write.csv("data/species_count_by_year.csv", row.names = FALSE)
   
-
 ```
 
