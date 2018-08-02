@@ -46,6 +46,8 @@ condition_colors <- c("before" = "#FDBF6F",
                       "construction" = "#A6CEE3", 
                       "after" = "#33A02C")
 
+refresh <- F
+
 ```
 
 
@@ -122,70 +124,76 @@ behavior_key <- data.frame(
 
 **Load data:**
 ```{r load-data, echo = T, include = T}
-dat <- read_excel("data/SHOREBIRD_DATA_Complete_2018.xls", sheet = 1) %>% 
-  rename_all(tolower) %>%
-  select(-analyze, -`pre/post construction`) %>%
-  rename(obs_date = date,
-         tide_ft = `tide (ft)`,
-         tide_hl = `high/low`, # I assume this is tide?
-         island = `aram?`,
-         aou_num = `aou num`,
-         record_num = `record num`,
-         gulls = gullls
-         ) %>% 
+if (refresh) {
+  dat <- read_excel("data/SHOREBIRD_DATA_Complete_2018.xls", sheet = 1) %>% 
+    rename_all(tolower) %>%
+    select(-analyze, -`pre/post construction`) %>%
+    rename(obs_date = date,
+           tide_ft = `tide (ft)`,
+           tide_hl = `high/low`, # I assume this is tide?
+           island = `aram?`,
+           aou_num = `aou num`,
+           record_num = `record num`,
+           gulls = gullls
+    ) %>% 
+    
+    mutate(obs_date = as.Date(obs_date),
+           month_no = lubridate::month(obs_date),
+           year = lubridate::year(obs_date) # there were many missing year entries, populate here
+    ) %>% 
+    
+    # pre/post improvements (see note under "Change Over Time")
+    mutate(epoch = ifelse(obs_date < "2011-09-01", "before", 
+                          ifelse(obs_date < "2012-09-01", "construction", "after"))) %>% 
+    mutate(epoch = factor(epoch, levels = c("before", "construction", "after"))) %>% 
+    
+    # species names
+    mutate(species = tolower(species)) %>% 
+    mutate(species = ifelse(species %in% c("none", "-", "0", NA), "none", species)) %>% 
+    mutate(is_bird = !(species %in% c("deer", "humans"))) %>% 
+    
+    # convert guild to logical
+    mutate(shorebirds = grepl("x", tolower(shorebirds)),
+           peeps = grepl("x", tolower(peeps)),
+           gulls = grepl("x", tolower(gulls)),
+           terns = grepl("x", tolower(terns)),
+           wading = grepl("x", tolower(wading)),
+           grebes = grepl("x", tolower(grebes))
+    ) %>% 
+    
+    # Make MECE guild column:
+    # In this data all peeps are also shorebirds and there's no "other" 
+    # NB should not have any peeps bc classified as shorebirds
+    mutate(guild = ifelse(shorebirds, "shorebirds", 
+                          ifelse(peeps, "peeps", 
+                                 ifelse(gulls, "gulls", 
+                                        ifelse(terns, "terns", 
+                                               ifelse(wading, "wading", 
+                                                      ifelse(grebes, "grebes", "other"))))))
+    ) %>% 
+    
+    # clean up behaviors:
+    mutate(behavior = ifelse(behavior %in% c("FO", "FV", "FW", "F?", "O,F"), "F", 
+                             ifelse(behavior %in% c("O,F", "OW"), "O", 
+                                    ifelse(behavior %in% c("R/F", "F/R"), "R/F", 
+                                           ifelse(behavior %in% c("?", "FLYOVER"), NA, behavior))))) %>% 
+    mutate(behavior = factor(behavior, levels = c("O", "F", "R", "R/F", ""))) %>% 
+    
+    # tide 
+    mutate(tide_hl = gsub('"', "", tolower(tide_hl))) %>% 
+    # mutate(tide_hl = factor(tide_hl, levels = "low", "mid", "high")) %>%
+    
+    # remove some funny data (TODO: check with Julia)
+    subset(isle != "ROAMING" & isle != "*") %>% 
+    
+    # fill missing location data
+    mutate(island = ifelse(tolower(isle) %in% c("as", "ac", "an"), "Aramburu", 
+                           ifelse(tolower(isle) %in% c("p"), "Pickleweed", "Unnamed")))
   
-  mutate(obs_date = as.Date(obs_date),
-         month_no = lubridate::month(obs_date),
-         year = lubridate::year(obs_date) # there were many missing year entries, populate here
-         ) %>% 
-  
-  # pre/post improvements (see note under "Change Over Time")
-  mutate(epoch = ifelse(obs_date < "2011-09-01", "before", 
-                        ifelse(obs_date < "2012-09-01", "construction", "after"))) %>% 
-  mutate(epoch = factor(epoch, levels = c("before", "construction", "after"))) %>% 
-
-  # species names
-  mutate(species = tolower(species)) %>% 
-  mutate(species = ifelse(species %in% c("none", "-", "0", NA), "none", species)) %>% 
-  mutate(is_bird = !(species %in% c("deer", "humans"))) %>% 
-  
-  # convert guild to logical
-  mutate(shorebirds = grepl("x", tolower(shorebirds)),
-         peeps = grepl("x", tolower(peeps)),
-         gulls = grepl("x", tolower(gulls)),
-         terns = grepl("x", tolower(terns)),
-         wading = grepl("x", tolower(wading)),
-         grebes = grepl("x", tolower(grebes))
-         ) %>% 
-  
-  # Make MECE guild column:
-  # In this data all peeps are also shorebirds and there's no "other" 
-  # NB should not have any peeps bc classified as shorebirds
-  mutate(guild = ifelse(shorebirds, "shorebirds", 
-                        ifelse(peeps, "peeps", 
-                               ifelse(gulls, "gulls", 
-                                      ifelse(terns, "terns", 
-                                             ifelse(wading, "wading", 
-                                                    ifelse(grebes, "grebes", "other"))))))
-         ) %>% 
-  
-  # clean up behaviors:
-  mutate(behavior = ifelse(behavior %in% c("FO", "FV", "FW", "F?", "O,F"), "F", 
-                           ifelse(behavior %in% c("O,F", "OW"), "O", 
-                                  ifelse(behavior %in% c("R/F", "F/R"), "R/F", 
-                                         ifelse(behavior %in% c("?", "FLYOVER"), NA, behavior))))) %>% 
-  mutate(behavior = factor(behavior, levels = c("O", "F", "R", "R/F", ""))) %>% 
-  
-  # tide 
-  mutate(tide_hl = gsub('"', "", tolower(tide_hl))) %>% 
-  # mutate(tide_hl = factor(tide_hl, levels = "low", "mid", "high")) %>%
-  
-  # remove some funny data (TODO: check with Julia)
-  subset(isle != "ROAMING" & isle != "*") %>% 
-  
-  # fill missing location data
-  mutate(island = ifelse(tolower(isle) %in% c("as", "ac", "an"), "Aramburu", 
-                         ifelse(tolower(isle) %in% c("p"), "Pickleweed", "Unnamed")))
+  saveRDS(dat, "data/dat.rds")
+} else {
+  dat <- readRDS("data/dat.rds")  
+}
   
 dat %>% g
 ```
