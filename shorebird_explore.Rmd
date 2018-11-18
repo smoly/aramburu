@@ -1665,7 +1665,7 @@ island_diffs_before %>%
 
 ## Aramburu
 ```{r}
-focal_species <- c("American Wigeon", "Caspian Tern", "Elegant Tern", "Least Sandpiper", "Spotted Sandpiper", "Marbled Godwit", "Long-billed Curlew", "Black-necked Stilt", "American Coot", "Western Sandpiper", "Double-crested Cormorant", "Black Oystercatcher")
+focal_species <- c("American Wigeon", "Caspian Tern", "Elegant Tern", "Least Sandpiper", "Spotted Sandpiper", "Marbled Godwit", "Long-billed Curlew", "Black-necked Stilt", "American Coot", "Double-crested Cormorant", "Black Oystercatcher")
 
 focal_counts <- dat %>% 
   # choose only Aramburu
@@ -1675,70 +1675,79 @@ focal_counts <- dat %>%
   select(obs_date, island, tide_hl,common, qty
          # isle, position
   ) %>% 
-  group_by(obs_date, island, tide_hl, common) %>% 
+  group_by(obs_date, island, common) %>% 
   summarize(qty = sum(qty, na.rm = T)) %>% 
   ungroup() %>% 
   tidyr::spread(common, qty) %>% 
-  tidyr::gather(common, qty, -obs_date, -island, -tide_hl) %>% 
+  tidyr::gather(common, qty, -obs_date, -island) %>% 
   replace_na(list(qty = 0)) %>% 
   mutate(was_observed = ifelse(qty>0,1,0)) %>% 
+  mutate(n_observed_w_nulls = ifelse(qty>0, qty, NA)) %>% 
   mutate(year_no = lubridate::year(obs_date)) %>% 
-  group_by(year_no, island, tide_hl, common) %>% 
+  group_by(year_no, island, common) %>% 
   summarize(p_present = mean(was_observed),
-            n_present = mean(qty)) %>% 
+            n_present = mean(n_observed_w_nulls, na.rm = T)) %>% 
   subset(common %in% focal_species) 
 ```
 
 ### frequency of sightings
 
+**Methods:**
+For each island, compute the fracton of surveys each year (both at high and low tide) in which any number of each species was present.
+
 ```{r}
 focal_counts %>% 
-  subset(tide_hl == "low") %>% 
   ggplot(aes(x = year_no, y = p_present, color = common)) +
   geom_line(color = "black") +
   geom_point(color = "black") +
   facet_wrap(~common) + 
   theme_bw() +
   theme(legend.position = "none") +
-  labs(x = "Year", y = "fraction of surveys", title = "Aramburu: Frequency of Each Species Being Present")
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "Year", y = "", title = "Aramburu: Species Presence")
 ```
 
+
+
 ### total number of individuals
+
+**Methods:**
+For each island, compute average number of individuals present per year. Only count individuals when the species was observed (i.e. do not average in 0s)
+
 ```{r}
 focal_counts %>% 
-  subset(tide_hl == "low") %>% 
   ggplot(aes(x = year_no, y = n_present, color = common)) +
-  geom_line() +
-  geom_point() +
-  facet_wrap(~common) + 
+  geom_line(color = "black") +
+  geom_point(color = "black") +
+  facet_wrap(~common, scales = "free_y") + 
   theme_bw() +
-  theme(legend.position = "right") +
+  theme(legend.position = "none") +
   labs(x = "Year", y = "number of individuals", title = "Aramburu: Average Number of Individuals Present")
 ```
 
 ## Pickleweed
 ```{r}
-focal_species <- c("American Wigeon", "Caspian Tern", "Elegant Tern", "Least Sandpiper", "Spotted Sandpiper", "Marbled Godwit", "Long-billed Curlew", "Black-necked Stilt", "American Coot", "Western Sandpiper", "Double-crested Cormorant", "Dunlin", "Black Oystercatcher")
+focal_species <- c("American Wigeon", "Caspian Tern", "Elegant Tern", "Least Sandpiper", "Spotted Sandpiper", "Marbled Godwit", "Long-billed Curlew", "Black-necked Stilt", "American Coot", "Double-crested Cormorant", "Black Oystercatcher")
 
 focal_counts_pi <- dat %>% 
-  # choose only Aramburu
   subset(island == "Pickleweed") %>% 
   subset(tide_hl %in% c("low", "high")) %>%
   subset(!grepl(pattern = "Unidentif", x = common)) %>% 
   select(obs_date, island, tide_hl,common, qty
          # isle, position
   ) %>% 
-  group_by(obs_date, island, tide_hl, common) %>% 
+  group_by(obs_date, island, common) %>% 
   summarize(qty = sum(qty, na.rm = T)) %>% 
   ungroup() %>% 
   tidyr::spread(common, qty) %>% 
-  tidyr::gather(common, qty, -obs_date, -island, -tide_hl) %>% 
+  tidyr::gather(common, qty, -obs_date, -island) %>% 
   replace_na(list(qty = 0)) %>% 
   mutate(was_observed = ifelse(qty>0,1,0)) %>% 
+  mutate(n_observed_w_nulls = ifelse(qty>0, qty, NA)) %>% 
   mutate(year_no = lubridate::year(obs_date)) %>% 
-  group_by(year_no, island, tide_hl, common) %>% 
+  group_by(year_no, island, common) %>% 
   summarize(p_present = mean(was_observed),
-            n_present = mean(qty)) %>% 
+            n_present = mean(n_observed_w_nulls, na.rm = T)) %>% 
   subset(common %in% focal_species) 
 ```
 
@@ -1746,30 +1755,29 @@ focal_counts_pi <- dat %>%
 
 ```{r}
 focal_counts_pi %>% 
-  subset(tide_hl == "low") %>% 
   ggplot(aes(x = year_no, y = p_present, color = common)) +
   geom_line(color = "black") +
   geom_point(color = "black") +
   facet_wrap(~common) + 
   theme_bw() +
   theme(legend.position = "none") +
-  labs(x = "Year", y = "fraction of surveys", title = "Pickleweed: Frequency of Each Species Being Present")
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "Year", y = "", title = "Pickleweed: Frequency of Each Species Being Present")
 ```
 
 ### total number of individuals
 ```{r}
 focal_counts_pi %>% 
-  subset(tide_hl == "low") %>% 
   ggplot(aes(x = year_no, y = n_present, color = common)) +
-  geom_line() +
-  geom_point() +
-  facet_wrap(~common) + 
+  geom_line(color = "black") +
+  geom_point(color = "black") +
+  facet_wrap(~common, scales = "free_y") + 
   theme_bw() +
-  theme(legend.position = "right") +
-  labs(x = "Year", y = "number of individuals", title = "Pickleweed: Average Number of Individuals Present")
+  theme(legend.position = "none") +
+  labs(x = "Year", y = "", title = "Pickleweed: Average Number of Individuals Present")
 ```
 
-## usage of different habitat
+# Habitat
 ```{r}
 focal_species_habitat <- dat %>% 
   # choose only Aramburu
@@ -1792,15 +1800,28 @@ focal_species_habitat <- dat %>%
 ```
 
 ```{r}
+habitat_colors <- c("vegetation" = "#4DAF4A", 
+                    "mudflat" = "#a65628",
+                    "rock_sand" = "#E5C494",
+                    "floating_on_water" = "#08519C", 
+                    "standing_in_water" = "#6BAED6",
+                    "over_water" = "#9ECAE1"
+                    )
+habitat_fill_scale <- scale_fill_manual(name = "Habitat", values = habitat_colors)
+```
+
+
+```{r}
 focal_species_habitat %>% 
   subset(!is.na(long_name)) %>% 
   ggplot(aes(x = epoch, y = p_sp_on_habitat, fill = long_name)) +
   geom_bar(stat = "identity") + 
   facet_wrap(~common) + 
   theme_bw() +
-  theme(legend.title = element_blank()) + 
+  theme(legend.title = element_blank(), legend.position = "bottom") + 
   scale_y_continuous(breaks = c(0,1)) +
-  labs(x = "Before/After Restoration", y = "frequency on habitat", title = "Aramburu: Fractional Use of Habitat Before vs. After Restoration")
+  habitat_fill_scale +
+  labs(x = "Before/After Restoration", y = "frequency on habitat", title = "Aramburu: Use of Habitat Before vs. After Restoration")
 ```
 
 
@@ -1811,22 +1832,38 @@ focal_species_habitat %>%
 Save csv to data directory (data/species_count_by_year.csv)
 
 ```{r}
-dat %>% 
-  group_by(obs_date, island, tide_hl, common) %>% 
-  summarize(qty = sum(qty)) %>% 
-  # fill qty with 0s when bird was not recorded on a given day:
-  tidyr::spread(common, qty) %>% 
-  tidyr::gather(common, qty, -obs_date, -island, -tide_hl) %>% 
-  replace_na(list(qty = 0)) %>% 
-  mutate(year = lubridate::year(obs_date)) %>% 
-  group_by(island, year, tide_hl, common) %>% 
-  summarize(mean_observed = mean(qty)) %>% 
-  subset(common != "<NA>") %>% 
-  subset(!is.na(year)) %>% 
-  subset(tide_hl %in% c("low", "high")) %>% #exclude "mid"
-  tidyr::spread(year, mean_observed) %>% 
-  arrange(island, tide_hl) %>% 
-  write.csv("data/species_count_by_year.csv", row.names = FALSE)
+# dat %>% 
+#   group_by(obs_date, island, tide_hl, common) %>% 
+#   summarize(qty = sum(qty)) %>% 
+#   # fill qty with 0s when bird was not recorded on a given day:
+#   tidyr::spread(common, qty) %>% 
+#   tidyr::gather(common, qty, -obs_date, -island, -tide_hl) %>% 
+#   replace_na(list(qty = 0)) %>% 
+#   mutate(year = lubridate::year(obs_date)) %>% 
+#   group_by(island, year, tide_hl, common) %>% 
+#   summarize(mean_observed = mean(qty)) %>% 
+#   subset(common != "<NA>") %>% 
+#   subset(!is.na(year)) %>% 
+#   subset(tide_hl %in% c("low", "high")) %>% #exclude "mid"
+#   tidyr::spread(year, mean_observed) %>% 
+#   arrange(island, tide_hl) %>% 
+#   write.csv("data/species_count_by_year.csv", row.names = FALSE)
 
+```
+
+Raw data, per JK request
+```{r}
+# dat %>% 
+#   write.csv("data/formatted_raw_data.csv", row.names = FALSE)
+```
+
+Table of unique species on each island after construction
+```{r}
+dat %>%
+  subset(is_bird) %>%
+  group_by(epoch, island, common) %>%
+  summarize(qty = sum(qty)) %>% 
+  arrange(epoch, island, common) %>% 
+  write.csv("data/species_per_island.csv", row.names = FALSE)
 ```
 
