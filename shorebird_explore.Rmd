@@ -119,8 +119,8 @@ position_key <- data.frame(
 )
 
 behavior_key <- data.frame(
-  short_name = c("r", "f", "o"),
-  long_name = c("roosting", "foraging", "other")
+  short_name = c("r", "f", "o", "r/f"),
+  long_name = c("roosting", "foraging", "other", "roosting/foraging")
 )
 ```
 
@@ -369,9 +369,9 @@ dat %>%
 - Data sampling dates ranged from Sept 2009 - July 2018
 - Tide "high" vs. "low" was based on "HIGH/LOW" column in the spreadsheet.
 - Construction epochs:
-  - Pre: Before 2011-09-01
-  - Construction: 2011-09-01 - 2012-09-01
-  - Post: After 2012-09-01
+- Pre: Before 2011-09-01
+- Construction: 2011-09-01 - 2012-09-01
+- Post: After 2012-09-01
 - Guilds: When not provided in the source data, birds were classified into guilds according to the following lookup:
 - The only data excluded were those where isle was "roaming" and "*"
 
@@ -512,9 +512,9 @@ plot_dat %>%
   geom_text(data = subset(plot_dat, tide_hl_num == 1 ), 
             aes(label = common, color = common), 
             size =3, hjust = 1.15, fontface = "bold") +
-    # geom_text(data = subset(plot_dat, tide_hl_num == 2 & diff_type == "fewer at low tide"), 
-    #         aes(label = common, color = common), 
-    #         size = 3, hjust = -0.15, fontface = "bold") +
+  # geom_text(data = subset(plot_dat, tide_hl_num == 2 & diff_type == "fewer at low tide"), 
+  #         aes(label = common, color = common), 
+  #         size = 3, hjust = -0.15, fontface = "bold") +
   # geom_text(data = subset(plot_dat, tide_hl_num == 2), aes(label = common, color = common),
   #           size = 2, hjust = -0.15, fontface = "bold") +
   facet_wrap(~diff_type) + 
@@ -548,9 +548,9 @@ plot_dat %>%
   geom_text(data = subset(plot_dat, tide_hl_num == 1 ), 
             aes(label = common, color = common), 
             size =3, hjust = 1.15, fontface = "bold") +
-    # geom_text(data = subset(plot_dat, tide_hl_num == 2 & diff_type == "fewer at low tide"), 
-    #         aes(label = common, color = common), 
-    #         size = 3, hjust = -0.15, fontface = "bold") +
+  # geom_text(data = subset(plot_dat, tide_hl_num == 2 & diff_type == "fewer at low tide"), 
+  #         aes(label = common, color = common), 
+  #         size = 3, hjust = -0.15, fontface = "bold") +
   # geom_text(data = subset(plot_dat, tide_hl_num == 2), aes(label = common, color = common),
   #           size = 2, hjust = -0.15, fontface = "bold") +
   facet_wrap(~diff_type) + 
@@ -560,7 +560,7 @@ plot_dat %>%
   scale_x_continuous(limits = c(-1.5, 2.5), breaks = c(1,2), labels = c("low", "high"), minor_breaks = NULL) +
   labs(x = "Tide", y = "Frequency of Sighting", 
        subtitle = "Pickleweed Island",
-       title = "Sspecies with significantly different presence at low vs. high tide",
+       title = "Species with significantly different presence at low vs. high tide",
        caption = "only species with p < 0.01, chi-squared test")
 
 ```
@@ -936,11 +936,11 @@ Conclusion: There really isn't enough data to make claims about individual speci
 Since we have a control island (Pickleweed), it's technically more correct to do a pair-wise comparison between observations on Ar and Pi. However, that would add even _more_ noise since we'd be combining noise across the two islands. Results would be even less significant and less interpretable.
 
 - Construction epochs:
-  - Pre: Before 2011-09-01
-  - Construction: 2011-09-01 - 2012-09-01
-  - Post: After 2012-09-01
+- Pre: Before 2011-09-01
+- Construction: 2011-09-01 - 2012-09-01
+- Post: After 2012-09-01
 
-**Methods:**
+### Methods
 
 For each island, we counted the number of individuals present of each species at high and low tide (separately) on each survey date. To account for the global decrease in abundance as well as confounders such as season we fitted a linear model to the species counts. The model was of the form:
 
@@ -978,7 +978,7 @@ tide_qty_per_sp_ar <- dat %>%
   mutate(month_no = factor(lubridate::month(obs_date)))
 
 lm_nind <- lm(qty ~ 
-              + epoch
+                + epoch
               + common
               + month_no
               + tide_hl
@@ -1030,14 +1030,14 @@ tide_qty_per_sp_pi <- dat %>%
   mutate(month_no = factor(lubridate::month(obs_date)))
 
 lm_nind_pi <- lm(qty ~ 
-              + epoch
-              + common
-              + month_no
-              + tide_hl
-              + epoch:common
-              # + (1 | common) # ICC = .10 w/ lmer
-              , 
-              data = tide_qty_per_sp_pi)
+                   + epoch
+                 + common
+                 + month_no
+                 + tide_hl
+                 + epoch:common
+                 # + (1 | common) # ICC = .10 w/ lmer
+                 , 
+                 data = tide_qty_per_sp_pi)
 
 # summary(lm_nind)
 
@@ -1066,7 +1066,7 @@ nind_coeff_pi %>%
 
 ## Guilds
 
-** Methods **
+### Methods
 Same analysis as for individuals above, but grouped at the guild level to get more statistical power.
 
 Conclusion: Data is also too noisy to see real changes on the guild level too. It does look like Aramburu had more gulls after construction and fewer water fowl. Pickleweed also saw an increase in gulls (directionally, but not signif.)
@@ -1137,14 +1137,14 @@ tide_qty_per_guild_pi <- dat %>%
   mutate(month_no = factor(lubridate::month(obs_date)))
 
 lm_nguild_pi <- lm(qty ~ 
-                  + epoch
-                + guild
-                + month_no
-                + tide_hl
-                + epoch:guild
-                # + (1 | common) # ICC = .10 w/ lmer; not used
-                , 
-                data = tide_qty_per_guild_pi)
+                     + epoch
+                   + guild
+                   + month_no
+                   + tide_hl
+                   + epoch:guild
+                   # + (1 | common) # ICC = .10 w/ lmer; not used
+                   , 
+                   data = tide_qty_per_guild_pi)
 
 # summary(lm_nind)
 
@@ -1167,7 +1167,7 @@ nguild_coeff_pi %>%
        subtitle = "positive values: more individuals after improvements")
 ```
 
-## Behaviors
+# Behaviors
 ```{r}
 behaviors <- dat %>% 
   # choose only Aramburu birds
@@ -1193,8 +1193,12 @@ lm_behav <- lm(qty ~
 
 behav_coeff <- broom::tidy(lm_behav) 
 
-summary(lm_behav)
+# summary(lm_behav)
 ```
+
+## Change w/ construction
+
+Was there a significant difference in the number of individuals spending time on each behavaior before vs. after construction? No.
 
 ```{r}
 behav_coeff %>% 
@@ -1210,6 +1214,231 @@ behav_coeff %>%
        title = "Aramburu: Behavior after vs. before improvements",
        subtitle = "positive values: more of the behavior after improvements")
 ```
+
+## Behavior Frequency by Guild
+
+```{r}
+behaviors_guild <- dat %>% 
+  subset(island %in% c("Aramburu", "Pickleweed")) %>% 
+  subset(epoch %in% c("after")) %>% 
+  subset(tide_hl %in% c("low", "high")) %>%
+  subset(is_bird) %>% 
+  mutate(behavior = as.character(behavior)) %>%
+  mutate(behavior_long = 
+           ifelse(behavior == "O", "Other", 
+                  ifelse(behavior == "F", "Foraging", 
+                         ifelse(behavior == "R", "Roosting", 
+                                ifelse(behavior == "R/F", "Roosting/Foraging", "Unlabeled"))))) %>% 
+  mutate(behavior_long = ifelse(is.na(behavior_long), "Unlabeled", behavior_long)) %>% 
+  mutate(behavior_long = factor(behavior_long, levels = c("Roosting", "Foraging", "Roosting/Foraging", "Other", "Unlabeled"))) %>% 
+# summarize to get total quantity of a species
+group_by(island, guild, behavior_long
+         ) %>% 
+  summarize(qty = sum(qty, na.rm = T))  %>% 
+  mutate(p = qty/sum(qty))
+
+# behaviors_guild
+```
+
+```{r}
+behavior_colors <- brewer.pal(length(behaviors_guild$behavior_long %>% unique()), "Set2")
+names(behavior_colors) <- levels(behaviors_guild$behavior_long)
+behaviors_fill_scale <- scale_fill_manual(name = "Behaviors", values = behavior_colors)
+```
+
+
+**Methods:**
+For all sampling dates after construction (after 2012-09-01), at both high and low tide, add up the number of individuals per guild observed doing each behavior. Then, plot what fraction of individuals per guild were doing each behavior:
+
+
+```{r}
+behaviors_guild %>% 
+  subset(!is.na(guild)) %>% 
+  # subset(island == "Aramburu") %>% 
+  ggplot(aes(x = reorder(guild, p), y = p, fill = behavior_long)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_grid(island~.) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1), legend.title=element_blank()) +
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "", y = "", title = "Percent of Individuals Performing Each Behavior") 
+
+# behaviors_guild %>% 
+#   subset(!is.na(guild)) %>% 
+#   subset(island == "Pickleweed") %>% 
+#   ggplot(aes(x = reorder(guild, p), y = p, fill = behavior_long)) +
+#   geom_bar(stat = "identity", position = "stack") +
+#   # facet_grid(island~.) + 
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+#   labs(x = "", y = "", title = "Pickleweed: Fraction of Guild Time Spent on Each Behavior") 
+```
+
+## Behavior breakdown by species {.tabset}
+
+**Methods:**
+For all sampling dates after construction (after 2012-09-01), at both high and low tide, add up the number of individuals per species observed doing each behavior. Then, plot what fraction of individuals per species were doing each behavior:
+
+```{r}
+behaviors_sp <- dat %>% 
+  subset(island %in% c("Aramburu", "Pickleweed")) %>% 
+  subset(epoch %in% c("after")) %>% 
+  subset(tide_hl %in% c("low", "high")) %>%
+  subset(is_bird) %>% 
+  mutate(behavior = as.character(behavior)) %>%
+  mutate(behavior_long = 
+           ifelse(behavior == "O", "Other", 
+                  ifelse(behavior == "F", "Foraging", 
+                         ifelse(behavior == "R", "Roosting", 
+                                ifelse(behavior == "R/F", "Roosting/Foraging", "Unlabeled"))))) %>% 
+  mutate(behavior_long = ifelse(is.na(behavior_long), "Unlabeled", behavior_long)) %>%
+ mutate(behavior_long = factor(behavior_long, levels = c("Roosting", "Foraging", "Roosting/Foraging", "Other", "Unlabeled"))) %>% 
+
+# summarize to get total quantity of a species
+group_by(island, guild, common, behavior_long
+         ) %>% 
+  summarize(qty = sum(qty, na.rm = T))  %>% 
+  mutate(p_sp = qty/sum(qty),
+         p_guild = p_sp/sum(sum(qty)))
+
+# # Save to CSV
+behaviors_sp %>%
+  write.csv("data/behaviors_sp.csv")
+
+```
+
+### corvid
+```{r}
+behaviors_sp %>% subset(!is.na(guild)) %>% 
+  subset(island == "Aramburu") %>%
+  subset(guild == "corvid") %>%
+  ggplot(aes(x = common, y = p_sp, fill = behavior_long)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_wrap(~ guild) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  behaviors_fill_scale + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "", y = "", title = "Time Spent on Each Behavior") 
+```
+### grebes
+```{r}
+behaviors_sp %>% subset(!is.na(guild)) %>% 
+  subset(!grepl("Unidentif", common)) %>% 
+  subset(island == "Aramburu") %>%
+  subset(guild == "grebes") %>%
+  ggplot(aes(x = common, y = p_sp, fill = behavior_long)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_wrap(~ guild) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  behaviors_fill_scale + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "", y = "", title = "Time Spent on Each Behavior") 
+```
+
+### gulls
+```{r}
+behaviors_sp %>% subset(!is.na(guild)) %>%
+  subset(!grepl("Unidentif", common)) %>% 
+  subset(island == "Aramburu") %>%
+  subset(guild == "gulls") %>%
+  ggplot(aes(x = common, y = p_sp, fill = behavior_long)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_wrap(~ guild) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  behaviors_fill_scale + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "", y = "", title = "Time Spent on Each Behavior") 
+```
+
+### land birds
+```{r}
+behaviors_sp %>% subset(!is.na(guild)) %>% 
+  subset(!grepl("Unidentif", common)) %>% 
+  subset(island == "Aramburu") %>%
+  subset(guild == "land_bird") %>%
+  ggplot(aes(x = common, y = p_sp, fill = behavior_long)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_wrap(~ guild) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  behaviors_fill_scale + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "", y = "", title = "Time Spent on Each Behavior") 
+```
+
+### shorebirds
+```{r}
+behaviors_sp %>% subset(!is.na(guild)) %>% 
+  subset(island == "Aramburu") %>%
+  subset(guild == "shorebirds") %>%
+  subset(!grepl("Unidentif", common)) %>% 
+  ggplot(aes(x = common, y = p_sp, fill = behavior_long)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_wrap(~ guild) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  behaviors_fill_scale + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "", y = "", title = "Time Spent on Each Behavior") 
+```
+
+### water fowl
+```{r}
+behaviors_sp %>% subset(!is.na(guild)) %>% 
+  subset(!(common %in% "Rock Pigeon")) %>% 
+  subset(island == "Aramburu") %>%
+  subset(guild == "water_fowl") %>%
+  subset(!grepl("Unidentif", common)) %>% 
+  ggplot(aes(x = common, y = p_sp, fill = behavior_long)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_wrap(~ guild) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  behaviors_fill_scale + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "", y = "", title = "Time Spent on Each Behavior") 
+```
+
+### wading
+```{r}
+behaviors_sp %>% subset(!is.na(guild)) %>% 
+  subset(island == "Aramburu") %>%
+  subset(guild == "wading") %>%
+  subset(!grepl("Unidentif", common)) %>% 
+  ggplot(aes(x = common, y = p_sp, fill = behavior_long)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_wrap(~ guild) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  behaviors_fill_scale + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "", y = "", title = "Time Spent on Each Behavior") 
+```
+
+### pelicaniformes
+```{r}
+behaviors_sp %>% subset(!is.na(guild)) %>% 
+  subset(island == "Aramburu") %>%
+  subset(guild == "pelicaniformes") %>%
+  subset(!grepl("Unidentif", common)) %>% 
+  ggplot(aes(x = common, y = p_sp, fill = behavior_long)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_wrap(~ guild) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  behaviors_fill_scale + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "", y = "", title = "Time Spent on Each Behavior") 
+```
+
+### terns
+```{r}
+behaviors_sp %>% subset(!is.na(guild)) %>% 
+  subset(island == "Aramburu") %>%
+  subset(guild == "terns") %>%
+  subset(!grepl("Unidentif", common)) %>% 
+  ggplot(aes(x = common, y = p_sp, fill = behavior_long)) +
+  geom_bar(stat = "identity", position = "stack") +
+  facet_wrap(~ guild) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  behaviors_fill_scale + 
+  scale_y_continuous(labels = scales::percent) + 
+  labs(x = "", y = "", title = "Time Spent on Each Behavior") 
+```
+
 
 ## Habitats
 ```{r}
@@ -1445,7 +1674,7 @@ focal_counts <- dat %>%
   subset(!grepl(pattern = "Unidentif", x = common)) %>% 
   select(obs_date, island, tide_hl,common, qty
          # isle, position
-         ) %>% 
+  ) %>% 
   group_by(obs_date, island, tide_hl, common) %>% 
   summarize(qty = sum(qty, na.rm = T)) %>% 
   ungroup() %>% 
@@ -1498,7 +1727,7 @@ focal_counts_pi <- dat %>%
   subset(!grepl(pattern = "Unidentif", x = common)) %>% 
   select(obs_date, island, tide_hl,common, qty
          # isle, position
-         ) %>% 
+  ) %>% 
   group_by(obs_date, island, tide_hl, common) %>% 
   summarize(qty = sum(qty, na.rm = T)) %>% 
   ungroup() %>% 
@@ -1551,7 +1780,7 @@ focal_species_habitat <- dat %>%
   subset(tide_hl == "low") %>% 
   select(epoch, island, position, common, qty
          # isle, position
-         ) %>% 
+  ) %>% 
   group_by(epoch, island, position, common) %>% 
   summarize(qty = sum(qty, na.rm = T)) %>% 
   ungroup() %>% 
@@ -1598,6 +1827,6 @@ dat %>%
   tidyr::spread(year, mean_observed) %>% 
   arrange(island, tide_hl) %>% 
   write.csv("data/species_count_by_year.csv", row.names = FALSE)
-  
+
 ```
 
